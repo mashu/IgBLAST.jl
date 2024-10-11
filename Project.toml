@@ -1,0 +1,13 @@
+name = "IgBLAST"
+uuid = "0b79348f-fd03-46c5-b933-bdb7f1bed3f3"
+authors = ["Mateusz Kaduk <mateusz.kaduk@gmail.com> and contributors"]
+version = "0.0.1"
+
+[compat]
+julia = "1.11"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
