@@ -82,7 +82,13 @@ include("install.jl")
 include("run.jl")
 
 function __init__()
-    ensure_artifact_installed("IgBLAST", joinpath(@__DIR__, "..", "Artifacts.toml"))
+    artifact_toml = joinpath(@__DIR__, "..", "Artifacts.toml")
+    if !isfile(artifact_toml) || !is_igblast_installed()
+        @info "IgBLAST not found or not properly installed. Installing now..."
+        install_igblast()
+    else
+        ensure_artifact_installed("IgBLAST", artifact_toml)
+    end
 end
 
 end # module
