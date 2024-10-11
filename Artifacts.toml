@@ -1,0 +1,6 @@
+[IgBLAST]
+git-tree-sha1 = "608cdcf04bdc6bb83bad7450111443e5697b5d15"
+
+    [[IgBLAST.download]]
+    sha256 = "d54f1e1001fff529811c933595ef3c2322961c82b2d37a53f7a7914cd5807449"
+    url = "https://ftp.ncbi.nih.gov/blast/executables/igblast/release/1.22.0/ncbi-igblast-1.22.0-x64-linux.tar.gz"
