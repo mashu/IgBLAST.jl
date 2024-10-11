@@ -29,17 +29,17 @@ using IgBLAST
 # Install IgBLAST (if not already installed)
 install_igblast()
 
-# Run an IgBLASTn analysis
+# Run an IgBLASTn analysis (example)
 run_igblast(
     IgBLASTn,
-    "query.fasta",
-    "V.fasta",
-    "D.fasta",
-    "J.fasta",
-    "auxiliary.txt",
-    "output.txt",
-    additional_params = Dict("organism" => "human", "domain_system" => "imgt")
+    "data/ERR4238106.fasta.gz",
+    "data/Macaca_mulatta_V.fasta",
+    "data/Macaca_mulatta_D.fasta",
+    "data/Macaca_mulatta_J.fasta",
+    "data/rhesus_monkey_gl.aux",
+    "ERR4238106.tsv",
+    additional_params = Dict("organism" => "rhesus_monkey", "ig_seqtype" => "ig")
 )
 ```
 
-For more detailed information, please refer to the [documentation](https://mashu.github.io/IgBLAST.jl/).
+For more detailed information, please refer to the [documentation](https://mashu.github.io/IgBLAST.jl/dev/).
