@@ -38,7 +38,7 @@ run_igblast(
     "data/Macaca_mulatta_J.fasta",
     "data/rhesus_monkey_gl.aux",
     "ERR4238106.tsv",
-    additional_params = Dict("organism" => "rhesus_monkey", "ig_seqtype" => "ig")
+    additional_params = Dict("organism" => "rhesus_monkey", "ig_seqtype" => "Ig")
 )
 ```
 

@@ -1,9 +1,9 @@
 """
     run_igblast(
         igblast_type::Type{T},
-        query_file::String, 
-        v_database::String, 
-        d_database::String, 
+        query_file::String,
+        v_database::String,
+        d_database::String,
         j_database::String,
         aux_file::String,
         output_file::String,
@@ -39,9 +39,9 @@ run_igblast(IgBLASTn, "query.fasta", "V.fasta", "D.fasta", "J.fasta", "aux.txt",
 """
 function run_igblast(
     igblast_type::Type{T},
-    query_file::String, 
-    v_database::String, 
-    d_database::String, 
+    query_file::String,
+    v_database::String,
+    d_database::String,
     j_database::String,
     aux_file::String,
     output_file::String,
@@ -138,7 +138,9 @@ function run_igblast(
             end
         end
 
-        process = run(cmd, wait=false)
+        out = IOBuffer()
+        err = IOBuffer()
+        process = run(pipeline(cmd, stdout=out, stderr=err), wait=false)
 
         while process_running(process)
             if isready(done_channel)
@@ -154,9 +156,8 @@ function run_igblast(
         end
 
         if !success(process)
-            error_output = read(stderr, String)
-            @error "IgBLAST failed to run successfully" error_output
-            error("IgBLAST execution failed. Check the error message above.")
+            error_output = String(take!(err))
+            error("$(error_output)\nIgBLAST execution failed. Check the error message above.")
         end
 
         @info "IgBLAST analysis completed. Output saved to $output_file"
