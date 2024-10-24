@@ -1,7 +1,7 @@
 name = "IgBLAST"
 uuid = "0b79348f-fd03-46c5-b933-bdb7f1bed3f3"
 authors = ["Mateusz Kaduk <mateusz.kaduk@gmail.com> and contributors"]
-version = "0.0.1"
+version = "0.0.2"
 
 [deps]
 ArtifactUtils = "8b73e784-e7d8-4ea5-973d-377fed4e3bce"
