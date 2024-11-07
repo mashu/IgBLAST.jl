@@ -9,7 +9,7 @@ using IgBLAST
 
     @testset "Utility Functions" begin
         @test IgBLAST.get_igblast_url() isa String
-        
+
         # Create a temporary FASTA file for testing
         temp_fasta = tempname() * ".fasta"
         open(temp_fasta, "w") do io
@@ -18,9 +18,9 @@ using IgBLAST
                 println(io, "ACGT" * repeat("N", i))
             end
         end
-        
+
         @test IgBLAST.count_fasta_sequences(temp_fasta) == 10
-        
+
         # Clean up the temporary file
         rm(temp_fasta)
     end
@@ -58,7 +58,7 @@ using IgBLAST
             j_database,
             aux_file,
             output_file,
-            additional_params = Dict{String, Any}(
+            additional_params = Dict{String, String}(
                 "organism" => "human",
                 "domain_system" => "imgt"
             )

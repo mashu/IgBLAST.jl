@@ -47,7 +47,7 @@ function run_igblast(
     output_file::String,
     num_threads::Int = Base.Threads.nthreads();
     outfmt::Int = 19,
-    additional_params::Dict{String, Any} = Dict{String, Any}()
+    additional_params::Dict{String, String} = Dict{String, String}()
 ) where T <: AbstractIgBLAST
 
     if !is_igblast_installed()

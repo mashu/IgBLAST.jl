@@ -35,7 +35,7 @@ run_igblast(
 """
 module IgBLAST
 
-using Artifacts, ArtifactUtils
+using Artifacts
 using CodecZlib
 using TranscodingStreams
 using Pkg.BinaryPlatforms
