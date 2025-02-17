@@ -95,6 +95,10 @@ function run_igblast(
         cmd = `$igblast_exe -germline_db_V $temp_v_db -germline_db_D $temp_d_db -germline_db_J $temp_j_db
             -auxiliary_data $temp_aux -query $temp_query -outfmt $outfmt
             -num_threads $num_threads -out $output_file`
+        if igblast_type == IgBLASTp
+            cmd = `$igblast_exe -germline_db_V $temp_v_db -query $temp_query -outfmt $outfmt
+            -num_threads $num_threads -out $output_file`
+        end
 
         for (key, value) in additional_params
             cmd = `$cmd -$key $value`
