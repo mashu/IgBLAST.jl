@@ -1,6 +1,16 @@
 using Test
 using IgBLAST
+using Aqua
 
+@testset "Aqua.jl" begin
+  Aqua.test_all(
+    IgBLAST;
+    #ambiguities=(exclude=[SomePackage.some_function], broken=true),
+    stale_deps=(ignore=[:IgBLAST],),
+    deps_compat=(ignore=[:IgBLAST],),
+    #piracies=false,
+  )
+end
 @testset "IgBLAST.jl" begin
     @testset "Installation" begin
         @test install_igblast() === nothing
