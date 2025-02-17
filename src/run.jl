@@ -85,9 +85,9 @@ function run_igblast(
         temp_query = joinpath(temp_dir, "query.fasta")
         copy_and_decompress(query_file, temp_query)
 
-        temp_v_db = prepare_db(makeblastdb, v_database, "V", temp_dir)
-        temp_d_db = prepare_db(makeblastdb, d_database, "D", temp_dir)
-        temp_j_db = prepare_db(makeblastdb, j_database, "J", temp_dir)
+        temp_v_db = prepare_db(makeblastdb, v_database, "V", temp_dir, is_protein=(igblast_type == IgBLASTp))
+        temp_d_db = prepare_db(makeblastdb, d_database, "D", temp_dir, is_protein=(igblast_type == IgBLASTp))
+        temp_j_db = prepare_db(makeblastdb, j_database, "J", temp_dir, is_protein=(igblast_type == IgBLASTp))
 
         temp_aux = joinpath(temp_dir, "aux_file")
         cp(aux_file, temp_aux)
@@ -96,7 +96,7 @@ function run_igblast(
             -auxiliary_data $temp_aux -query $temp_query -outfmt $outfmt
             -num_threads $num_threads -out $output_file`
         if igblast_type == IgBLASTp
-            cmd = `$igblast_exe -germline_db_V $temp_v_db -query $temp_query -outfmt $outfmt
+            cmd = `$igblast_exe -germline_db_V $temp_v_db -query $temp_query -outfmt 7
             -num_threads $num_threads -out $output_file`
         end
 

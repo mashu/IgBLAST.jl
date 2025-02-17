@@ -42,6 +42,8 @@ using Pkg.BinaryPlatforms
 using ProgressMeter
 import Pkg: ensure_artifact_installed
 import Pkg.BinaryPlatforms: platform_key_abi
+using BioSequences
+using FASTX
 
 export install_igblast, run_igblast, is_igblast_installed
 export AbstractIgBLAST, IgBLASTn, IgBLASTp

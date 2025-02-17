@@ -30,10 +30,52 @@ function count_fasta_sequences(filename::String)
     return count
 end
 
-function prepare_db(makeblastdb::String, db_file::String, db_type::String, temp_dir::String)
+"""
+    prepare_db(makeblastdb::String, db_file::String, db_type::String, temp_dir::String;
+              is_protein::Bool=false)
+
+Prepare a BLAST database from a FASTA file. Can handle both nucleotide and protein sequences.
+
+Arguments:
+- makeblastdb: Path to makeblastdb executable
+- db_file: Path to input FASTA file
+- db_type: Type identifier for the database
+- temp_dir: Directory for temporary files
+- is_protein: Whether to create a protein database (will translate if input is nucleotide)
+
+Returns:
+- Path to the prepared database
+"""
+function prepare_db(makeblastdb::String, db_file::String, db_type::String, temp_dir::String;
+                   is_protein::Bool=false)
     temp_db = joinpath(temp_dir, "$(db_type)_db.fasta")
-    cp(db_file, temp_db)
-    run(`$makeblastdb -in $temp_db -dbtype nucl -parse_seqids`)
+
+    if !is_protein
+        # For nucleotide sequences, just copy the file
+        cp(db_file, temp_db, force=true)
+        run(`$makeblastdb -in $temp_db -dbtype nucl -parse_seqids`)
+    else
+        # For protein database, translate if needed
+        open(FASTA.Writer, temp_db) do writer
+            reader = open(FASTA.Reader, db_file)
+            for record in reader
+                # Get DNA sequence and trim to be divisible by 3
+                dna_seq = LongDNA{4}(sequence(record))
+                trim_length = length(dna_seq) - (length(dna_seq) % 3)
+                dna_seq = dna_seq[1:trim_length]
+                protein_seq = translate(dna_seq)
+
+                # Create new record with translated sequence
+                new_record = FASTA.Record(FASTA.identifier(record), string(protein_seq))
+                write(writer, new_record)
+            end
+            close(reader)
+        end
+
+        # Create protein BLAST database
+        run(`$makeblastdb -in $temp_db -dbtype prot -parse_seqids`)
+    end
+
     return temp_db
 end
 
