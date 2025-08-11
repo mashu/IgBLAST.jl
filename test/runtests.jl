@@ -50,7 +50,6 @@ end
         j_database = tempname() * ".fasta"
         aux_file = tempname() * ".txt"
         output_file = tempname() * ".txt"
-
         # Write some dummy content to the files
         for file in [query_file, v_database, d_database, j_database]
             open(file, "w") do io
@@ -70,8 +69,9 @@ end
             output_file,
             additional_params = Dict{String, String}(
                 "organism" => "human",
-                "domain_system" => "imgt"
-            )
+                "domain_system" => "imgt",
+                "ungapped" => ""
+                )
         )
 
         @test isfile(output_file)

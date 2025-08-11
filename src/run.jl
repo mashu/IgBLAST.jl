@@ -26,7 +26,7 @@ Required parameters:
 Optional parameters:
 - `num_threads`: Number of threads to use (default: all available threads)
 - `outfmt`: Output format (default: 19 for AIRR format)
-- `additional_params`: Dictionary of additional IgBLAST parameters
+- `additional_params`: Dictionary of additional IgBLAST parameters. Specify the parameter name as the key and the value as the value. If the value is an empty string, the parameter will be treated as a flag.
 
 Example:
 ```julia
@@ -101,7 +101,11 @@ function run_igblast(
         end
 
         for (key, value) in additional_params
-            cmd = `$cmd -$key $value`
+            if value == ""
+                cmd = `$cmd -$key`
+            else
+                cmd = `$cmd -$key $value`
+            end
         end
 
         total_sequences = count_fasta_sequences(temp_query)
