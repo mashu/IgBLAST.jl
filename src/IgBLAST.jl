@@ -14,24 +14,65 @@ It handles the installation of IgBLAST binaries, prepares input files, runs anal
 - `IgBLASTp`: Type representing the protein version of IgBLAST
 
 # Examples
+
+## Nucleotide sequence assignment (IgBLASTn)
+
+For nucleotide sequences, both query and database files should contain nucleotide sequences:
+
 ```julia
 using IgBLAST
 
 # Install IgBLAST if not already installed
 install_igblast()
 
-# Run an IgBLASTn analysis
+# Run an IgBLASTn analysis with nucleotide sequences
 run_igblast(
     IgBLASTn,
-    "query.fasta",
-    "V.fasta",
-    "D.fasta",
-    "J.fasta",
-    "auxiliary.txt",
+    "query_nucleotide.fasta",  # Nucleotide query sequences
+    "V_nucleotide.fasta",       # Nucleotide V gene database
+    "D_nucleotide.fasta",       # Nucleotide D gene database
+    "J_nucleotide.fasta",      # Nucleotide J gene database
+    "auxiliary.txt",            # Auxiliary file (can be empty string "" if not needed)
+    "output.txt",
+    additional_params = Dict("organism" => "human", "domain_system" => "imgt")
+)
+
+# Run without auxiliary file (optional for assignments without CDR3 analysis)
+run_igblast(
+    IgBLASTn,
+    "query_nucleotide.fasta",
+    "V_nucleotide.fasta",
+    "D_nucleotide.fasta",
+    "J_nucleotide.fasta",
+    "",  # Empty aux_file
     "output.txt",
     additional_params = Dict("organism" => "human", "domain_system" => "imgt")
 )
 ```
+
+## Protein sequence assignment (IgBLASTp)
+
+For protein sequences, the query file must contain protein sequences (amino acids), while the database files should contain nucleotide sequences (which will be automatically translated to protein during database preparation):
+
+```julia
+# Run an IgBLASTp analysis with protein query sequences
+run_igblast(
+    IgBLASTp,
+    "query_protein.fasta",      # Protein query sequences (must be amino acids, not nucleotides)
+    "V_nucleotide.fasta",       # Nucleotide V gene database (will be translated to protein)
+    "D_nucleotide.fasta",       # Nucleotide D gene database (will be translated to protein, but not used)
+    "J_nucleotide.fasta",       # Nucleotide J gene database (will be translated to protein, but not used)
+    "",                         # Auxiliary file not used by IgBLASTp
+    "output.txt",
+    additional_params = Dict("organism" => "human")
+)
+```
+
+**Important notes:**
+- For `IgBLASTn`: Both query and database files should contain nucleotide sequences. Returns V, D, and J assignments.
+- For `IgBLASTp`: Query file must contain protein sequences (amino acids), database files should contain nucleotide sequences. **Only returns V assignments** (D and J databases are prepared but not used by IgBLASTp).
+- The `aux_file` parameter can be an empty string `""` if not needed (useful for assignments without CDR3 analysis)
+- `IgBLASTp` does not support the auxiliary file parameter
 """
 module IgBLAST
 

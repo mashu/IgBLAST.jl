@@ -20,7 +20,7 @@ Required parameters:
 - `v_database`: Path to the V gene database
 - `d_database`: Path to the D gene database
 - `j_database`: Path to the J gene database
-- `aux_file`: Path to the auxiliary file
+- `aux_file`: Path to the auxiliary file (optional, can be empty string "" if not needed)
 - `output_file`: Path for the output file
 
 Optional parameters:
@@ -58,7 +58,9 @@ function run_igblast(
     @assert isfile(v_database) "V database file does not exist: $v_database"
     @assert isfile(d_database) "D database file does not exist: $d_database"
     @assert isfile(j_database) "J database file does not exist: $j_database"
-    @assert isfile(aux_file) "Auxiliary file does not exist: $aux_file"
+    if aux_file != ""
+        @assert isfile(aux_file) "Auxiliary file does not exist: $aux_file"
+    end
     @assert num_threads > 0 "Number of threads must be positive"
 
     output_dir = dirname(output_file)
@@ -85,19 +87,33 @@ function run_igblast(
         temp_query = joinpath(temp_dir, "query.fasta")
         copy_and_decompress(query_file, temp_query)
 
+        # For IgBLASTp, translate nucleotide databases to protein (IgBLASTp requires protein databases)
+        # For IgBLASTn, use nucleotide databases as-is
         temp_v_db = prepare_db(makeblastdb, v_database, "V", temp_dir, is_protein=(igblast_type == IgBLASTp))
         temp_d_db = prepare_db(makeblastdb, d_database, "D", temp_dir, is_protein=(igblast_type == IgBLASTp))
         temp_j_db = prepare_db(makeblastdb, j_database, "J", temp_dir, is_protein=(igblast_type == IgBLASTp))
 
-        temp_aux = joinpath(temp_dir, "aux_file")
-        cp(aux_file, temp_aux)
+        # Prepare auxiliary file if provided
+        temp_aux = nothing
+        if aux_file != ""
+            temp_aux = joinpath(temp_dir, "aux_file")
+            cp(aux_file, temp_aux)
+        end
 
-        cmd = `$igblast_exe -germline_db_V $temp_v_db -germline_db_D $temp_d_db -germline_db_J $temp_j_db
-            -auxiliary_data $temp_aux -query $temp_query -outfmt $outfmt
-            -num_threads $num_threads -out $output_file`
+        # Build command based on IgBLAST type
         if igblast_type == IgBLASTp
+            # IgBLASTp doesn't support auxiliary_data parameter
             cmd = `$igblast_exe -germline_db_V $temp_v_db -query $temp_query -outfmt 7
             -num_threads $num_threads -out $output_file`
+        else
+            cmd = `$igblast_exe -germline_db_V $temp_v_db -germline_db_D $temp_d_db -germline_db_J $temp_j_db
+            -query $temp_query -outfmt $outfmt
+            -num_threads $num_threads -out $output_file`
+            
+            # Add auxiliary_data only if aux_file is provided (only for IgBLASTn)
+            if temp_aux !== nothing
+                cmd = `$cmd -auxiliary_data $temp_aux`
+            end
         end
 
         for (key, value) in additional_params
