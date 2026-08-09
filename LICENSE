@@ -2,6 +2,13 @@ MIT License
 
 Copyright (c) 2024 Mateusz Kaduk <mateusz.kaduk@gmail.com> and contributors
 
+This license applies only to the IgBLAST.jl Julia package (the packaging,
+wrapper code, and associated documentation in this repository). It does not
+cover the NCBI IgBLAST binaries or other NCBI-distributed files that this
+package may download and invoke; those remain subject to NCBI's own terms
+(United States Government Work / public domain, with exceptions for certain
+third-party files as described by NCBI).
+
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
 in the Software without restriction, including without limitation the rights

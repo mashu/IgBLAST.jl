@@ -4,6 +4,7 @@
 [![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://mashu.github.io/IgBLAST.jl/dev/)
 [![Build Status](https://github.com/mashu/IgBLAST.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/mashu/IgBLAST.jl/actions/workflows/CI.yml?query=branch%3Amain)
 [![Coverage](https://codecov.io/gh/mashu/IgBLAST.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/mashu/IgBLAST.jl)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
 A Julia package for running IgBLAST (v1.22.0) analyses on immunoglobulin (Ig) and T cell receptor (TCR) sequences.
 
@@ -114,4 +115,10 @@ run_igblast(
 - Paths ending in `.gz` are treated as gzip for both query input and result output.
 - Empty string `""` for aux remains accepted for backward compatibility.
 
-For more detail, see the [documentation](https://mashu.github.io/IgBLAST.jl/dev/).
+## License
+
+The **MIT License** in [`LICENSE`](./LICENSE) covers only this Julia package — the wrapper, packaging, and Julia source in this repository. It does **not** apply to the NCBI IgBLAST binaries that the package downloads and runs.
+
+NCBI IgBLAST itself is distributed separately by NCBI. With the exception of certain third-party files summarized by NCBI, that software is a “United States Government Work” under the terms of the United States Copyright Act. It was written as part of the authors’ official duties as United States Government employees and thus cannot be copyrighted. This software is freely available to the public for use. The National Library of Medicine and the U.S. Government have not placed any restriction on its use or reproduction.
+
+See the [NCBI IgBLAST documentation](https://ncbi.github.io/igblast/) for upstream details and any third-party notices bundled with the tool.
