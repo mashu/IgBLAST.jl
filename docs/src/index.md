@@ -6,7 +6,7 @@ CurrentModule = IgBLAST
 
 A Julia package for running [IgBLAST](https://github.com/mashu/IgBLAST.jl) (v1.22.0) on immunoglobulin (Ig) and T cell receptor (TCR) sequences.
 
-The API uses **multiple dispatch**: omit the auxiliary file, pass `nothing` / [`NoAuxiliary`](@ref) / [`noauxiliary`](@ref), or supply a path / [`AuxiliaryFile`](@ref). Prefer [`IgBLASTRunner`](@ref) for repeated runs.
+Auxiliary data is **optional**: omit it by default, or pass a custom [`AuxiliaryFile`](@ref) / path when needed. Prefer [`IgBLASTRunner`](@ref) for repeated runs.
 
 ## Installation
 
@@ -33,11 +33,7 @@ run_igblast(
     additional_params = Dict("organism" => "human", "domain_system" => "imgt"),
 )
 
-# Explicit no-aux alternatives
-run_igblast(IgBLASTn, "query.fasta", "V.fasta", "D.fasta", "J.fasta", nothing, "output.tsv")
-run_igblast(IgBLASTn, "query.fasta", "V.fasta", "D.fasta", "J.fasta", noauxiliary, "output.tsv")
-
-# With auxiliary file
+# Custom auxiliary file
 run_igblast(
     IgBLASTn,
     "query.fasta",
@@ -45,32 +41,28 @@ run_igblast(
     "D.fasta",
     "J.fasta",
     "human_gl.aux",
-    "output.tsv";
-    additional_params = Dict("organism" => "human", "domain_system" => "imgt"),
+    "output.tsv",
 )
 
-# Callable runner
+# Typed germlines + runner
+dbs = VDJGermlines("V.fasta", "D.fasta", "J.fasta")
 runner = IgBLASTRunner(IgBLASTn; additional_params=Dict("organism" => "human"))
-runner("query.fasta", "V.fasta", "D.fasta", "J.fasta", "out.tsv")
+runner("query.fasta", dbs, "out.tsv")
 ```
 
 ### IgBLASTp
 
-Query sequences must be amino acids; germline FASTA files should be nucleotide (translated when building BLAST DBs). Only V assignments are returned; auxiliary data is ignored.
+Only the V germline is used (D/J are not prepared):
 
 ```julia
 run_igblast(
     IgBLASTp,
     "query_protein.fasta",
     "V_nucleotide.fasta",
-    "D_nucleotide.fasta",
-    "J_nucleotide.fasta",
     "output.tsv";
     additional_params = Dict("organism" => "human"),
 )
 ```
-
-Empty string `""` for the auxiliary argument remains accepted for backward compatibility and means no auxiliary file.
 
 ## API
 

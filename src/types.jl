@@ -27,12 +27,20 @@ Return the IgBLAST executable basename for the given variant.
 executable(::Type{IgBLASTn}) = "igblastn"
 executable(::Type{IgBLASTp}) = "igblastp"
 
-# --- Molecule kind (dispatch for database preparation) ---
+"""
+    default_outfmt(::Type{<:AbstractIgBLAST})
+
+Default `-outfmt` for the variant.
+"""
+default_outfmt(::Type{IgBLASTn}) = 19
+default_outfmt(::Type{IgBLASTp}) = 7
+
+# --- Molecule kind ---
 
 """
     AbstractMolecule
 
-Abstract molecule kind used when preparing BLAST databases.
+Molecule kind used when preparing BLAST databases.
 """
 abstract type AbstractMolecule end
 
@@ -42,56 +50,57 @@ struct ProteinMolecule <: AbstractMolecule end
 """
     molecule(::Type{<:AbstractIgBLAST})
 
-Return the molecule kind required by germline databases for this IgBLAST variant.
+Molecule kind required by germline databases for this variant.
 """
 molecule(::Type{IgBLASTn}) = DNAMolecule()
 molecule(::Type{IgBLASTp}) = ProteinMolecule()
 
-# --- Auxiliary data ---
+# --- Auxiliary data (optional) ---
 
 """
     AbstractAuxiliary
 
-Abstract type for optional IgBLAST auxiliary (J-gene) annotation data.
+Optional IgBLAST auxiliary (J-gene) annotation data.
+Omit aux, or pass [`NoAuxiliary`](@ref) / [`noauxiliary`](@ref), unless a custom
+[`AuxiliaryFile`](@ref) is required.
 """
 abstract type AbstractAuxiliary end
 
 """
     NoAuxiliary
 
-Sentinel type meaning no auxiliary file is supplied.
+Sentinel meaning no auxiliary file is supplied.
 """
 struct NoAuxiliary <: AbstractAuxiliary end
 
 """
     noauxiliary
 
-Singleton instance of [`NoAuxiliary`](@ref). Pass this (or omit the aux argument)
-when CDR3/auxiliary annotation is not needed.
+Singleton [`NoAuxiliary`](@ref) instance.
 """
 const noauxiliary = NoAuxiliary()
 
 """
     AuxiliaryFile{P<:AbstractString}
 
-Path to an IgBLAST auxiliary data file.
+Path to a custom IgBLAST auxiliary data file.
 """
 struct AuxiliaryFile{P<:AbstractString} <: AbstractAuxiliary
     path::P
 end
 
 """
-    supports_auxiliary(::Type{<:AbstractIgBLAST})
+    supports_auxiliary(::Type{<:AbstractIgBLAST}) -> Bool
 
-Trait: whether this IgBLAST variant accepts `-auxiliary_data`.
+Whether this variant accepts `-auxiliary_data`.
 """
-supports_auxiliary(::Type{<:AbstractIgBLAST}) = Val{false}()
-supports_auxiliary(::Type{IgBLASTn}) = Val{true}()
+supports_auxiliary(::Type{<:AbstractIgBLAST}) = false
+supports_auxiliary(::Type{IgBLASTn}) = true
 
 """
-    normalize_auxiliary(aux)
+    normalize_auxiliary(aux) -> AbstractAuxiliary
 
-Convert `nothing`, empty string, path, or auxiliary types into `AbstractAuxiliary`.
+Normalize `nothing`, empty string, path, or auxiliary values to [`AbstractAuxiliary`](@ref).
 """
 normalize_auxiliary(::Nothing) = NoAuxiliary()
 normalize_auxiliary(::NoAuxiliary) = NoAuxiliary()
@@ -102,11 +111,6 @@ function normalize_auxiliary(path::AbstractString)
     return AuxiliaryFile(path)
 end
 
-"""
-    validate_inputs(aux::AbstractAuxiliary)
-
-Validate that an auxiliary file exists when one was requested.
-"""
 validate_inputs(::NoAuxiliary) = nothing
 
 function validate_inputs(aux::AuxiliaryFile)
@@ -117,19 +121,100 @@ end
 # --- Germline databases ---
 
 """
-    GermlineDatabases{P<:AbstractString}
+    AbstractGermlines
 
-V, D, and J germline FASTA paths.
+Abstract germline FASTA collection used by an IgBLAST variant.
 """
-struct GermlineDatabases{P<:AbstractString}
+abstract type AbstractGermlines end
+
+"""
+    VGermlines{P<:AbstractString}
+
+V-only germline FASTA (used by [`IgBLASTp`](@ref)).
+"""
+struct VGermlines{P<:AbstractString} <: AbstractGermlines
+    v::P
+end
+
+"""
+    VDJGermlines{P<:AbstractString}
+
+V, D, and J germline FASTA paths (used by [`IgBLASTn`](@ref)).
+"""
+struct VDJGermlines{P<:AbstractString} <: AbstractGermlines
     v::P
     d::P
     j::P
 end
 
-function validate_inputs(db::GermlineDatabases)
+"""
+    GermlineDatabases
+
+Deprecated alias for [`VDJGermlines`](@ref).
+"""
+const GermlineDatabases = VDJGermlines
+
+function validate_inputs(db::VGermlines)
+    isfile(db.v) || throw(ArgumentError("V database file does not exist: $(db.v)"))
+    return nothing
+end
+
+function validate_inputs(db::VDJGermlines)
     isfile(db.v) || throw(ArgumentError("V database file does not exist: $(db.v)"))
     isfile(db.d) || throw(ArgumentError("D database file does not exist: $(db.d)"))
     isfile(db.j) || throw(ArgumentError("J database file does not exist: $(db.j)"))
     return nothing
 end
+
+"""
+    germlines_for(::Type{<:AbstractIgBLAST}, v, d, j)
+
+Build the germline collection appropriate for the IgBLAST variant.
+`IgBLASTp` keeps only V.
+"""
+germlines_for(::Type{IgBLASTn}, v::AbstractString, d::AbstractString, j::AbstractString) =
+    VDJGermlines(v, d, j)
+
+germlines_for(::Type{IgBLASTp}, v::AbstractString, ::AbstractString, ::AbstractString) =
+    VGermlines(v)
+
+germlines_for(::Type{IgBLASTp}, v::AbstractString) = VGermlines(v)
+
+# --- Prepared BLAST databases (after makeblastdb) ---
+
+"""
+    AbstractPreparedDB
+
+Prepared BLAST database paths produced for a specific IgBLAST variant.
+"""
+abstract type AbstractPreparedDB end
+
+struct PreparedVDJ{P<:AbstractString} <: AbstractPreparedDB
+    v::P
+    d::P
+    j::P
+end
+
+struct PreparedV{P<:AbstractString} <: AbstractPreparedDB
+    v::P
+end
+
+# --- Query staging ---
+
+abstract type AbstractQueryEncoding end
+struct PlainFASTA <: AbstractQueryEncoding end
+struct GzipFASTA <: AbstractQueryEncoding end
+
+query_encoding(path::AbstractString) =
+    endswith(path, ".gz") ? GzipFASTA() : PlainFASTA()
+
+# --- Output format (progress parsing) ---
+
+abstract type AbstractOutputFormat end
+struct AIRRFormat <: AbstractOutputFormat end
+struct CommentedTabularFormat <: AbstractOutputFormat end
+
+output_format(::Type{IgBLASTn}, outfmt::Integer) =
+    Int(outfmt) == 19 ? AIRRFormat() : CommentedTabularFormat()
+
+output_format(::Type{IgBLASTp}, ::Integer) = CommentedTabularFormat()

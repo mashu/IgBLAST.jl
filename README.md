@@ -10,8 +10,9 @@ A Julia package for running IgBLAST (v1.22.0) analyses on immunoglobulin (Ig) an
 ## Features
 
 - Automatic installation and management of IgBLAST binaries
-- Support for both IgBLASTn and IgBLASTp
-- Optional auxiliary file via multiple dispatch (`omit` / `nothing` / `NoAuxiliary` / path)
+- Support for both IgBLASTn and IgBLASTp via multiple dispatch
+- Optional auxiliary file — omit by default; supply a custom one only when needed
+- Typed germlines: `VDJGermlines` / `VGermlines`
 - Callable `IgBLASTRunner` for repeated configured runs
 - Progress monitoring for long-running analyses
 
@@ -32,7 +33,7 @@ install_igblast()
 
 ### Nucleotide assignment (IgBLASTn)
 
-Auxiliary data is **optional**. Prefer omitting it when CDR3 annotation is not needed:
+Auxiliary data is optional. Prefer omitting it unless you need a custom aux file:
 
 ```julia
 # No auxiliary file
@@ -46,11 +47,7 @@ run_igblast(
     additional_params = Dict("organism" => "human", "domain_system" => "imgt"),
 )
 
-# Explicit alternatives
-run_igblast(IgBLASTn, "query.fasta", "V.fasta", "D.fasta", "J.fasta", nothing, "output.tsv")
-run_igblast(IgBLASTn, "query.fasta", "V.fasta", "D.fasta", "J.fasta", noauxiliary, "output.tsv")
-
-# With auxiliary file
+# Custom auxiliary file
 run_igblast(
     IgBLASTn,
     "query.fasta",
@@ -61,6 +58,10 @@ run_igblast(
     "output.tsv";
     additional_params = Dict("organism" => "human", "domain_system" => "imgt"),
 )
+
+# Typed germlines
+dbs = VDJGermlines("V.fasta", "D.fasta", "J.fasta")
+run_igblast(IgBLASTn, "query.fasta", dbs, "output.tsv")
 ```
 
 ### Callable runner
@@ -70,28 +71,26 @@ runner = IgBLASTRunner(IgBLASTn; additional_params=Dict("organism"=>"human"))
 runner("query.fasta", "V.fasta", "D.fasta", "J.fasta", "out.tsv")
 
 runner_aux = IgBLASTRunner(IgBLASTn; aux="human_gl.aux")
-runner_aux("query.fasta", "V.fasta", "D.fasta", "J.fasta", "out.tsv")
+runner_aux("query.fasta", VDJGermlines("V.fasta", "D.fasta", "J.fasta"), "out.tsv")
 ```
 
 ### Protein assignment (IgBLASTp)
 
-Query sequences must be amino acids; germline FASTA files are nucleotide and are translated when building BLAST DBs. Only V assignments are returned:
+Query sequences must be amino acids; the V germline FASTA should be nucleotide (translated when building the BLAST DB). Only V is used:
 
 ```julia
 run_igblast(
     IgBLASTp,
     "query_protein.fasta",
     "V_nucleotide.fasta",
-    "D_nucleotide.fasta",
-    "J_nucleotide.fasta",
     "output.tsv";
     additional_params = Dict("organism" => "human"),
 )
 ```
 
 **Notes:**
-- `IgBLASTn`: nucleotide query and databases; returns V, D, and J.
-- `IgBLASTp`: protein query; germline FASTA should be nucleotide; auxiliary data is ignored.
-- Empty string `""` for `aux` remains accepted for backward compatibility and means no auxiliary file.
+- `IgBLASTn`: nucleotide query and V/D/J databases.
+- `IgBLASTp`: protein query; only V germline is prepared/used.
+- Empty string `""` for aux remains accepted for backward compatibility.
 
 For more detail, see the [documentation](https://mashu.github.io/IgBLAST.jl/dev/).

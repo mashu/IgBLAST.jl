@@ -41,27 +41,50 @@ function prepare_db(
 end
 
 """
-    prepare_databases(::Type{T}, makeblastdb, germlines, temp_dir) where T
+    prepare_databases(::Type{IgBLASTn}, makeblastdb, germlines, temp_dir)
 
-Prepare V/D/J BLAST databases for IgBLAST variant `T`.
+Prepare V, D, and J nucleotide BLAST databases.
 """
 function prepare_databases(
-    ::Type{T},
+    ::Type{IgBLASTn},
     makeblastdb::AbstractString,
-    germlines::GermlineDatabases,
+    germlines::VDJGermlines,
     temp_dir::AbstractString,
-) where T <: AbstractIgBLAST
-    mol = molecule(T)
-    v_db = prepare_db(makeblastdb, germlines.v, "V", temp_dir, mol)
-    d_db = prepare_db(makeblastdb, germlines.d, "D", temp_dir, mol)
-    j_db = prepare_db(makeblastdb, germlines.j, "J", temp_dir, mol)
-    return v_db, d_db, j_db
+)
+    mol = molecule(IgBLASTn)
+    return PreparedVDJ(
+        prepare_db(makeblastdb, germlines.v, "V", temp_dir, mol),
+        prepare_db(makeblastdb, germlines.d, "D", temp_dir, mol),
+        prepare_db(makeblastdb, germlines.j, "J", temp_dir, mol),
+    )
 end
+
+"""
+    prepare_databases(::Type{IgBLASTp}, makeblastdb, germlines, temp_dir)
+
+Prepare only the V protein BLAST database.
+"""
+function prepare_databases(
+    ::Type{IgBLASTp},
+    makeblastdb::AbstractString,
+    germlines::VGermlines,
+    temp_dir::AbstractString,
+)
+    mol = molecule(IgBLASTp)
+    return PreparedV(prepare_db(makeblastdb, germlines.v, "V", temp_dir, mol))
+end
+
+prepare_databases(
+    ::Type{IgBLASTp},
+    makeblastdb::AbstractString,
+    germlines::VDJGermlines,
+    temp_dir::AbstractString,
+) = prepare_databases(IgBLASTp, makeblastdb, VGermlines(germlines.v), temp_dir)
 
 """
     stage_auxiliary(aux, temp_dir)
 
-Copy an auxiliary file into `temp_dir`, or return `NoAuxiliary()` when none is provided.
+Copy an auxiliary file into `temp_dir`, or return [`NoAuxiliary`](@ref).
 """
 stage_auxiliary(::NoAuxiliary, ::AbstractString) = NoAuxiliary()
 

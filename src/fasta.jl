@@ -14,17 +14,37 @@ function count_fasta_sequences(filename::AbstractString)
 end
 
 """
-    copy_and_decompress(input_file::AbstractString, output_file::AbstractString)
+    stage_query(input_file, output_file, encoding)
 
-Copy `input_file` to `output_file`, decompressing gzip when the name ends with `.gz`.
+Copy or decompress a query FASTA into `output_file`, dispatching on encoding.
 """
-function copy_and_decompress(input_file::AbstractString, output_file::AbstractString)
-    if endswith(input_file, ".gz")
-        open(GzipDecompressorStream, input_file) do io
-            write(output_file, read(io))
-        end
-    else
-        cp(input_file, output_file)
+function stage_query(
+    input_file::AbstractString,
+    output_file::AbstractString,
+    ::PlainFASTA,
+)
+    cp(input_file, output_file)
+    return output_file
+end
+
+function stage_query(
+    input_file::AbstractString,
+    output_file::AbstractString,
+    ::GzipFASTA,
+)
+    open(GzipDecompressorStream, input_file) do io
+        write(output_file, read(io))
     end
     return output_file
 end
+
+"""
+    stage_query(input_file, output_file)
+
+Infer encoding from the filename and stage the query.
+"""
+stage_query(input_file::AbstractString, output_file::AbstractString) =
+    stage_query(input_file, output_file, query_encoding(input_file))
+
+# Backward-compatible name
+const copy_and_decompress = stage_query
