@@ -20,8 +20,8 @@ using IgBLAST
 
 install_igblast()
 
-# No auxiliary file
-run_igblast(IgBLASTn, "query.fasta", "V.fasta", "D.fasta", "J.fasta", "out.tsv";
+# No auxiliary file (plain or gzip query/output autodetected from extension)
+run_igblast(IgBLASTn, "query.fasta.gz", "V.fasta", "D.fasta", "J.fasta", "out.tsv.gz";
             additional_params = Dict("organism" => "human", "domain_system" => "imgt"))
 
 # Custom auxiliary file when required
@@ -54,7 +54,7 @@ const IGBLAST_VERSION = "1.22.0"
 
 include("types.jl")
 include("paths.jl")
-include("fasta.jl")
+include("io.jl")
 include("database.jl")
 include("command.jl")
 include("progress.jl")

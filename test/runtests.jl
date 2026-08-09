@@ -1,6 +1,7 @@
 using Test
 using IgBLAST
 using Aqua
+using CodecZlib
 
 @testset "Aqua.jl" begin
     Aqua.test_all(
@@ -258,5 +259,45 @@ end
         @test isfile(output_file2)
 
         foreach(rm, (query_file, v_database, d_database, j_database, output_file, output_file2))
+    end
+
+    @testset "Gzip query and output autodetection" begin
+        query_file = tempname() * ".fasta"
+        query_gz = tempname() * ".fasta.gz"
+        v_database = tempname() * ".fasta"
+        d_database = tempname() * ".fasta"
+        j_database = tempname() * ".fasta"
+        output_gz = tempname() * ".tsv.gz"
+
+        foreach(write_dummy_fasta, (query_file, v_database, d_database, j_database))
+        open(GzipCompressorStream, query_gz, "w") do out
+            write(out, read(query_file))
+        end
+
+        @test IgBLAST.file_encoding(query_gz) isa IgBLAST.GzipEncoding
+        @test IgBLAST.file_encoding(output_gz) isa IgBLAST.GzipEncoding
+        @test IgBLAST.count_fasta_sequences(query_gz) == 1
+
+        @test_logs (:info, r"IgBLAST analysis completed.*") run_igblast(
+            IgBLASTn,
+            query_gz,
+            v_database,
+            d_database,
+            j_database,
+            output_gz;
+            additional_params=Dict{String,String}(
+                "organism" => "human",
+                "domain_system" => "imgt",
+            ),
+        )
+
+        @test isfile(output_gz)
+        @test filesize(output_gz) > 0
+        open(GzipDecompressorStream, output_gz) do io
+            text = String(read(io))
+            @test !isempty(text)
+        end
+
+        foreach(rm, (query_file, query_gz, v_database, d_database, j_database, output_gz))
     end
 end

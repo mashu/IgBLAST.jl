@@ -112,6 +112,8 @@ function run_igblast(
 
     set_igdata!()
 
+    out_encoding = file_encoding(output)
+
     mktempdir() do temp_dir
         temp_query = joinpath(temp_dir, "query.fasta")
         stage_query(query, temp_query)
@@ -119,20 +121,23 @@ function run_igblast(
         prepared = prepare_databases(T, makeblastdb, germlines, temp_dir)
         staged_aux = stage_auxiliary(aux, temp_dir)
 
+        igblast_out = igblast_output_path(output, temp_dir, out_encoding)
+
         cmd = build_command(
             T,
             igblast_exe,
             temp_query,
             prepared,
             staged_aux,
-            output,
+            igblast_out,
             num_threads,
             fmt,
             additional_params,
         )
 
         total_sequences = count_fasta_sequences(temp_query)
-        run_process(cmd, output, total_sequences, output_format(T, fmt))
+        run_process(cmd, igblast_out, total_sequences, output_format(T, fmt))
+        finalize_output(igblast_out, output, out_encoding)
     end
 
     @info "IgBLAST analysis completed. Output saved to $output"

@@ -12,6 +12,7 @@ A Julia package for running IgBLAST (v1.22.0) analyses on immunoglobulin (Ig) an
 - Automatic installation and management of IgBLAST binaries
 - Support for both IgBLASTn and IgBLASTp via multiple dispatch
 - Optional auxiliary file — omit by default; supply a custom one only when needed
+- Gzip autodetection for query FASTA (`.fasta.gz`) and result TSV (`.tsv.gz`)
 - Typed germlines: `VDJGermlines` / `VGermlines`
 - Callable `IgBLASTRunner` for repeated configured runs
 - Progress monitoring for long-running analyses
@@ -33,7 +34,8 @@ install_igblast()
 
 ### Nucleotide assignment (IgBLASTn)
 
-Auxiliary data is optional. Prefer omitting it unless you need a custom aux file:
+Auxiliary data is optional. Prefer omitting it unless you need a custom aux file.
+Gzip compression for query/output is autodetected from a `.gz` suffix:
 
 ```julia
 # No auxiliary file
@@ -44,6 +46,17 @@ run_igblast(
     "D.fasta",
     "J.fasta",
     "output.tsv";
+    additional_params = Dict("organism" => "human", "domain_system" => "imgt"),
+)
+
+# Compressed query and/or output
+run_igblast(
+    IgBLASTn,
+    "query.fasta.gz",
+    "V.fasta",
+    "D.fasta",
+    "J.fasta",
+    "output.tsv.gz";
     additional_params = Dict("organism" => "human", "domain_system" => "imgt"),
 )
 
@@ -91,6 +104,7 @@ run_igblast(
 **Notes:**
 - `IgBLASTn`: nucleotide query and V/D/J databases.
 - `IgBLASTp`: protein query; only V germline is prepared/used.
+- Paths ending in `.gz` are treated as gzip for both query input and result output.
 - Empty string `""` for aux remains accepted for backward compatibility.
 
 For more detail, see the [documentation](https://mashu.github.io/IgBLAST.jl/dev/).

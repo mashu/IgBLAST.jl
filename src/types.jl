@@ -199,14 +199,25 @@ struct PreparedV{P<:AbstractString} <: AbstractPreparedDB
     v::P
 end
 
-# --- Query staging ---
+# --- File encoding (query input / result output) ---
 
-abstract type AbstractQueryEncoding end
-struct PlainFASTA <: AbstractQueryEncoding end
-struct GzipFASTA <: AbstractQueryEncoding end
+"""
+    AbstractFileEncoding
 
-query_encoding(path::AbstractString) =
-    endswith(path, ".gz") ? GzipFASTA() : PlainFASTA()
+Compression encoding inferred from a path (e.g. `.gz`).
+"""
+abstract type AbstractFileEncoding end
+
+struct PlainEncoding <: AbstractFileEncoding end
+struct GzipEncoding <: AbstractFileEncoding end
+
+"""
+    file_encoding(path) -> AbstractFileEncoding
+
+Autodetect encoding from the filename (`*.gz` → [`GzipEncoding`](@ref)).
+"""
+file_encoding(path::AbstractString) =
+    endswith(lowercase(path), ".gz") ? GzipEncoding() : PlainEncoding()
 
 # --- Output format (progress parsing) ---
 
