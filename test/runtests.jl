@@ -3,14 +3,13 @@ using IgBLAST
 using Aqua
 
 @testset "Aqua.jl" begin
-  Aqua.test_all(
-    IgBLAST;
-    #ambiguities=(exclude=[SomePackage.some_function], broken=true),
-    stale_deps=(ignore=[:IgBLAST],),
-    deps_compat=(ignore=[:IgBLAST],),
-    #piracies=false,
-  )
+    Aqua.test_all(
+        IgBLAST;
+        stale_deps=(ignore=[:IgBLAST],),
+        deps_compat=(ignore=[:IgBLAST],),
+    )
 end
+
 @testset "IgBLAST.jl" begin
     @testset "Installation" begin
         @test install_igblast() === nothing
@@ -20,7 +19,6 @@ end
     @testset "Utility Functions" begin
         @test IgBLAST.get_igblast_url() isa String
 
-        # Create a temporary FASTA file for testing
         temp_fasta = tempname() * ".fasta"
         open(temp_fasta, "w") do io
             for i in 1:10
@@ -30,33 +28,54 @@ end
         end
 
         @test IgBLAST.count_fasta_sequences(temp_fasta) == 10
-
-        # Clean up the temporary file
         rm(temp_fasta)
     end
 
-    @testset "IgBLAST Types" begin
+    @testset "Types and traits" begin
         @test IgBLASTn <: AbstractIgBLAST
         @test IgBLASTp <: AbstractIgBLAST
         @test IgBLAST.executable(IgBLASTn) == "igblastn"
         @test IgBLAST.executable(IgBLASTp) == "igblastp"
+        @test IgBLAST.supports_auxiliary(IgBLASTn) === Val{true}()
+        @test IgBLAST.supports_auxiliary(IgBLASTp) === Val{false}()
+        @test IgBLAST.molecule(IgBLASTn) isa IgBLAST.DNAMolecule
+        @test IgBLAST.molecule(IgBLASTp) isa IgBLAST.ProteinMolecule
+        @test IgBLAST.normalize_auxiliary(nothing) isa NoAuxiliary
+        @test IgBLAST.normalize_auxiliary("") isa NoAuxiliary
+        @test IgBLAST.normalize_auxiliary("aux.txt") isa AuxiliaryFile
+        @test IgBLAST.normalize_auxiliary(noauxiliary) isa NoAuxiliary
     end
 
-    @testset "Run IgBLAST" begin
-        # Create temporary files for testing
+    function write_dummy_fasta(path)
+        open(path, "w") do io
+            println(io, ">DummySequence")
+            println(io, "ACGTACGTACGT")
+        end
+    end
+
+    function write_protein_query(path)
+        open(path, "w") do io
+            println(io, ">QuerySequence")
+            println(io, "MCRMC")
+        end
+    end
+
+    function write_nucleotide_db(path)
+        open(path, "w") do io
+            println(io, ">DummySequence")
+            println(io, "ATGCGTATGCGTATGCGT")
+        end
+    end
+
+    @testset "Run IgBLASTn with aux file" begin
         query_file = tempname() * ".fasta"
         v_database = tempname() * ".fasta"
         d_database = tempname() * ".fasta"
         j_database = tempname() * ".fasta"
         aux_file = tempname() * ".txt"
         output_file = tempname() * ".txt"
-        # Write some dummy content to the files
-        for file in [query_file, v_database, d_database, j_database]
-            open(file, "w") do io
-                println(io, ">DummySequence")
-                println(io, "ACGTACGTACGT")
-            end
-        end
+
+        foreach(write_dummy_fasta, (query_file, v_database, d_database, j_database))
         touch(aux_file)
 
         @test_logs (:info, r"IgBLAST analysis completed.*") run_igblast(
@@ -66,38 +85,28 @@ end
             d_database,
             j_database,
             aux_file,
-            output_file,
-            additional_params = Dict{String, String}(
+            output_file;
+            additional_params=Dict{String,String}(
                 "organism" => "human",
                 "domain_system" => "imgt",
-                "ungapped" => ""
-                )
+                "ungapped" => "",
+            ),
         )
 
         @test isfile(output_file)
         @test filesize(output_file) > 0
 
-        # Clean up temporary files
-        for file in [query_file, v_database, d_database, j_database, aux_file, output_file]
-            rm(file)
-        end
+        foreach(rm, (query_file, v_database, d_database, j_database, aux_file, output_file))
     end
 
-    @testset "Run IgBLASTn without aux_file" begin
-        # Test IgBLASTn with empty aux_file (optional for assignments without CDR3)
+    @testset "Run IgBLASTn without aux (omitted)" begin
         query_file = tempname() * ".fasta"
         v_database = tempname() * ".fasta"
         d_database = tempname() * ".fasta"
         j_database = tempname() * ".fasta"
         output_file = tempname() * ".txt"
-        
-        # Write some dummy content to the files
-        for file in [query_file, v_database, d_database, j_database]
-            open(file, "w") do io
-                println(io, ">DummySequence")
-                println(io, "ACGTACGTACGT")
-            end
-        end
+
+        foreach(write_dummy_fasta, (query_file, v_database, d_database, j_database))
 
         @test_logs (:info, r"IgBLAST analysis completed.*") run_igblast(
             IgBLASTn,
@@ -105,48 +114,119 @@ end
             v_database,
             d_database,
             j_database,
-            "",  # Empty aux_file
-            output_file,
-            additional_params = Dict{String, String}(
+            output_file;
+            additional_params=Dict{String,String}(
                 "organism" => "human",
-                "domain_system" => "imgt"
-            )
+                "domain_system" => "imgt",
+            ),
         )
 
         @test isfile(output_file)
         @test filesize(output_file) > 0
 
-        # Clean up temporary files
-        for file in [query_file, v_database, d_database, j_database, output_file]
-            rm(file)
-        end
+        foreach(rm, (query_file, v_database, d_database, j_database, output_file))
+    end
+
+    @testset "Run IgBLASTn without aux (nothing / empty string)" begin
+        query_file = tempname() * ".fasta"
+        v_database = tempname() * ".fasta"
+        d_database = tempname() * ".fasta"
+        j_database = tempname() * ".fasta"
+        output_file = tempname() * ".txt"
+
+        foreach(write_dummy_fasta, (query_file, v_database, d_database, j_database))
+
+        @test_logs (:info, r"IgBLAST analysis completed.*") run_igblast(
+            IgBLASTn,
+            query_file,
+            v_database,
+            d_database,
+            j_database,
+            nothing,
+            output_file;
+            additional_params=Dict{String,String}(
+                "organism" => "human",
+                "domain_system" => "imgt",
+            ),
+        )
+
+        @test isfile(output_file)
+
+        output_file2 = tempname() * ".txt"
+        @test_logs (:info, r"IgBLAST analysis completed.*") run_igblast(
+            IgBLASTn,
+            query_file,
+            v_database,
+            d_database,
+            j_database,
+            "",
+            output_file2;
+            additional_params=Dict{String,String}(
+                "organism" => "human",
+                "domain_system" => "imgt",
+            ),
+        )
+        @test isfile(output_file2)
+
+        foreach(rm, (query_file, v_database, d_database, j_database, output_file, output_file2))
+    end
+
+    @testset "IgBLASTRunner functor" begin
+        query_file = tempname() * ".fasta"
+        v_database = tempname() * ".fasta"
+        d_database = tempname() * ".fasta"
+        j_database = tempname() * ".fasta"
+        output_file = tempname() * ".txt"
+
+        foreach(write_dummy_fasta, (query_file, v_database, d_database, j_database))
+
+        runner = IgBLASTRunner(
+            IgBLASTn;
+            additional_params=Dict{String,String}(
+                "organism" => "human",
+                "domain_system" => "imgt",
+            ),
+        )
+        @test runner.aux isa NoAuxiliary
+        @test_logs (:info, r"IgBLAST analysis completed.*") runner(
+            query_file, v_database, d_database, j_database, output_file,
+        )
+        @test isfile(output_file)
+
+        foreach(rm, (query_file, v_database, d_database, j_database, output_file))
+    end
+
+    @testset "Missing aux file errors clearly" begin
+        query_file = tempname() * ".fasta"
+        v_database = tempname() * ".fasta"
+        d_database = tempname() * ".fasta"
+        j_database = tempname() * ".fasta"
+        output_file = tempname() * ".txt"
+        foreach(write_dummy_fasta, (query_file, v_database, d_database, j_database))
+
+        @test_throws ArgumentError run_igblast(
+            IgBLASTn,
+            query_file,
+            v_database,
+            d_database,
+            j_database,
+            "/nonexistent/aux.txt",
+            output_file,
+        )
+
+        foreach(rm, (query_file, v_database, d_database, j_database))
+        isfile(output_file) && rm(output_file)
     end
 
     @testset "Run IgBLASTp" begin
-        # Create temporary files for testing IgBLASTp
-        # For IgBLASTp: query should be protein sequences, database should be nucleotide sequences
         query_file = tempname() * ".fasta"
         v_database = tempname() * ".fasta"
         d_database = tempname() * ".fasta"
         j_database = tempname() * ".fasta"
-        aux_file = tempname() * ".txt"
         output_file = tempname() * ".txt"
-        
-        # Query file: protein sequences
-        open(query_file, "w") do io
-            println(io, ">QuerySequence")
-            println(io, "MCRMC")  # Protein sequence
-        end
-        
-        # Database files: nucleotide sequences (will be translated to protein during DB preparation)
-        # Using sequences that are multiples of 3 for proper translation
-        for file in [v_database, d_database, j_database]
-            open(file, "w") do io
-                println(io, ">DummySequence")
-                println(io, "ATGCGTATGCGTATGCGT")  # 18 nucleotides = 6 amino acids (MCRMCR)
-            end
-        end
-        touch(aux_file)
+
+        write_protein_query(query_file)
+        foreach(write_nucleotide_db, (v_database, d_database, j_database))
 
         @test_logs (:info, r"IgBLAST analysis completed.*") run_igblast(
             IgBLASTp,
@@ -154,63 +234,13 @@ end
             v_database,
             d_database,
             j_database,
-            aux_file,
-            output_file,
-            additional_params = Dict{String, String}(
-                "organism" => "human"
-            )
+            output_file;
+            additional_params=Dict{String,String}("organism" => "human"),
         )
 
         @test isfile(output_file)
         @test filesize(output_file) > 0
 
-        # Clean up temporary files
-        for file in [query_file, v_database, d_database, j_database, aux_file, output_file]
-            rm(file)
-        end
-    end
-
-    @testset "Run IgBLASTp without aux_file" begin
-        # Test IgBLASTp with empty aux_file
-        query_file = tempname() * ".fasta"
-        v_database = tempname() * ".fasta"
-        d_database = tempname() * ".fasta"
-        j_database = tempname() * ".fasta"
-        output_file = tempname() * ".txt"
-        
-        # Query file: protein sequences
-        open(query_file, "w") do io
-            println(io, ">QuerySequence")
-            println(io, "MCRMC")  # Protein sequence
-        end
-        
-        # Database files: nucleotide sequences (will be translated to protein during DB preparation)
-        for file in [v_database, d_database, j_database]
-            open(file, "w") do io
-                println(io, ">DummySequence")
-                println(io, "ATGCGTATGCGTATGCGT")  # 18 nucleotides = 6 amino acids
-            end
-        end
-
-        @test_logs (:info, r"IgBLAST analysis completed.*") run_igblast(
-            IgBLASTp,
-            query_file,
-            v_database,
-            d_database,
-            j_database,
-            "",  # Empty aux_file
-            output_file,
-            additional_params = Dict{String, String}(
-                "organism" => "human"
-            )
-        )
-
-        @test isfile(output_file)
-        @test filesize(output_file) > 0
-
-        # Clean up temporary files
-        for file in [query_file, v_database, d_database, j_database, output_file]
-            rm(file)
-        end
+        foreach(rm, (query_file, v_database, d_database, j_database, output_file))
     end
 end

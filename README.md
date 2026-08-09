@@ -11,7 +11,8 @@ A Julia package for running IgBLAST (v1.22.0) analyses on immunoglobulin (Ig) an
 
 - Automatic installation and management of IgBLAST binaries
 - Support for both IgBLASTn and IgBLASTp
-- Easy-to-use interface with customizable parameters
+- Optional auxiliary file via multiple dispatch (`omit` / `nothing` / `NoAuxiliary` / path)
+- Callable `IgBLASTRunner` for repeated configured runs
 - Progress monitoring for long-running analyses
 
 ## Installation
@@ -26,62 +27,71 @@ Pkg.add("IgBLAST")
 ```julia
 using IgBLAST
 
-# Install IgBLAST (if not already installed)
 install_igblast()
 ```
 
-### Nucleotide Sequence Assignment (IgBLASTn)
+### Nucleotide assignment (IgBLASTn)
 
-For nucleotide sequences, both query and database files should contain nucleotide sequences:
+Auxiliary data is **optional**. Prefer omitting it when CDR3 annotation is not needed:
 
 ```julia
-# Run an IgBLASTn analysis with nucleotide sequences
+# No auxiliary file
 run_igblast(
     IgBLASTn,
-    "data/ERR4238106.fasta.gz",      # Nucleotide query sequences
-    "data/Macaca_mulatta_V.fasta",   # Nucleotide V gene database
-    "data/Macaca_mulatta_D.fasta",   # Nucleotide D gene database
-    "data/Macaca_mulatta_J.fasta",   # Nucleotide J gene database
-    "data/rhesus_monkey_gl.aux",     # Auxiliary file (can be "" if not needed)
-    "ERR4238106.tsv",
-    additional_params = Dict("organism" => "rhesus_monkey", "ig_seqtype" => "Ig")
+    "query.fasta",
+    "V.fasta",
+    "D.fasta",
+    "J.fasta",
+    "output.tsv";
+    additional_params = Dict("organism" => "human", "domain_system" => "imgt"),
 )
 
-# Run without auxiliary file (optional for assignments without CDR3 analysis)
+# Explicit alternatives
+run_igblast(IgBLASTn, "query.fasta", "V.fasta", "D.fasta", "J.fasta", nothing, "output.tsv")
+run_igblast(IgBLASTn, "query.fasta", "V.fasta", "D.fasta", "J.fasta", noauxiliary, "output.tsv")
+
+# With auxiliary file
 run_igblast(
     IgBLASTn,
-    "query_nucleotide.fasta",
+    "query.fasta",
+    "V.fasta",
+    "D.fasta",
+    "J.fasta",
+    "human_gl.aux",
+    "output.tsv";
+    additional_params = Dict("organism" => "human", "domain_system" => "imgt"),
+)
+```
+
+### Callable runner
+
+```julia
+runner = IgBLASTRunner(IgBLASTn; additional_params=Dict("organism"=>"human"))
+runner("query.fasta", "V.fasta", "D.fasta", "J.fasta", "out.tsv")
+
+runner_aux = IgBLASTRunner(IgBLASTn; aux="human_gl.aux")
+runner_aux("query.fasta", "V.fasta", "D.fasta", "J.fasta", "out.tsv")
+```
+
+### Protein assignment (IgBLASTp)
+
+Query sequences must be amino acids; germline FASTA files are nucleotide and are translated when building BLAST DBs. Only V assignments are returned:
+
+```julia
+run_igblast(
+    IgBLASTp,
+    "query_protein.fasta",
     "V_nucleotide.fasta",
     "D_nucleotide.fasta",
     "J_nucleotide.fasta",
-    "",  # Empty aux_file
-    "output.tsv",
-    additional_params = Dict("organism" => "human", "domain_system" => "imgt")
+    "output.tsv";
+    additional_params = Dict("organism" => "human"),
 )
 ```
 
-### Protein Sequence Assignment (IgBLASTp)
+**Notes:**
+- `IgBLASTn`: nucleotide query and databases; returns V, D, and J.
+- `IgBLASTp`: protein query; germline FASTA should be nucleotide; auxiliary data is ignored.
+- Empty string `""` for `aux` remains accepted for backward compatibility and means no auxiliary file.
 
-For protein sequences, the query file must contain protein sequences (amino acids), while the database files should contain nucleotide sequences (which will be automatically translated to protein during database preparation):
-
-```julia
-# Run an IgBLASTp analysis with protein query sequences
-run_igblast(
-    IgBLASTp,
-    "query_protein.fasta",      # Protein query sequences (must be amino acids, not nucleotides)
-    "V_nucleotide.fasta",       # Nucleotide V gene database (will be translated to protein)
-    "D_nucleotide.fasta",       # Nucleotide D gene database (will be translated to protein)
-    "J_nucleotide.fasta",       # Nucleotide J gene database (will be translated to protein)
-    "",                         # Auxiliary file not used by IgBLASTp
-    "output.tsv",
-    additional_params = Dict("organism" => "human")
-)
-```
-
-**Important notes:**
-- For `IgBLASTn`: Both query and database files should contain nucleotide sequences. Returns V, D, and J assignments.
-- For `IgBLASTp`: Query file must contain protein sequences (amino acids), database files should contain nucleotide sequences. **Only returns V assignments** (D and J databases are prepared but not used by IgBLASTp).
-- The `aux_file` parameter can be an empty string `""` if not needed (useful for assignments without CDR3 analysis)
-- `IgBLASTp` does not support the auxiliary file parameter
-
-For more detailed information, please refer to the [documentation](https://mashu.github.io/IgBLAST.jl/dev/).
+For more detail, see the [documentation](https://mashu.github.io/IgBLAST.jl/dev/).

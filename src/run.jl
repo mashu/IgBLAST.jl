@@ -1,205 +1,201 @@
 """
-    run_igblast(
-        igblast_type::Type{T},
-        query_file::String,
-        v_database::String,
-        d_database::String,
-        j_database::String,
-        aux_file::String,
-        output_file::String,
-        num_threads::Int = Base.Threads.nthreads();
-        outfmt::Int = 19,
-        additional_params::Dict{String, Any} = Dict()
-    ) where T <: AbstractIgBLAST
+    IgBLASTRunner{T,A}
 
-Run IgBLAST with the specified parameters.
+Callable configuration for repeated IgBLAST runs of variant `T` with auxiliary data `A`.
 
-Required parameters:
-- `igblast_type`: Type of IgBLAST to run (IgBLASTn or IgBLASTp)
-- `query_file`: Path to the input query file
-- `v_database`: Path to the V gene database
-- `d_database`: Path to the D gene database
-- `j_database`: Path to the J gene database
-- `aux_file`: Path to the auxiliary file (optional, can be empty string "" if not needed)
-- `output_file`: Path for the output file
-
-Optional parameters:
-- `num_threads`: Number of threads to use (default: all available threads)
-- `outfmt`: Output format (default: 19 for AIRR format)
-- `additional_params`: Dictionary of additional IgBLAST parameters. Specify the parameter name as the key and the value as the value. If the value is an empty string, the parameter will be treated as a flag.
-
-Example:
+# Example
 ```julia
-run_igblast(IgBLASTn, "query.fasta", "V.fasta", "D.fasta", "J.fasta", "aux.txt", "output.txt",
-            additional_params = Dict(
-                "organism" => "human",
-                "domain_system" => "imgt"
-            ))
+runner = IgBLASTRunner(IgBLASTn; additional_params=Dict("organism"=>"human"))
+runner(query, v, d, j, "out.tsv")
+
+runner_aux = IgBLASTRunner(IgBLASTn; aux="human_gl.aux")
+runner_aux(query, v, d, j, "out.tsv")
 ```
 """
+struct IgBLASTRunner{T<:AbstractIgBLAST,A<:AbstractAuxiliary}
+    aux::A
+    num_threads::Int
+    outfmt::Int
+    additional_params::Dict{String,String}
+end
+
+function IgBLASTRunner(
+    ::Type{T};
+    aux=NoAuxiliary(),
+    num_threads::Integer=Base.Threads.nthreads(),
+    outfmt::Integer=19,
+    additional_params::Dict{String,String}=Dict{String,String}(),
+) where T <: AbstractIgBLAST
+    normalized = normalize_auxiliary(aux)
+    return IgBLASTRunner{T,typeof(normalized)}(
+        normalized,
+        Int(num_threads),
+        Int(outfmt),
+        additional_params,
+    )
+end
+
+function (runner::IgBLASTRunner{T})(
+    query::AbstractString,
+    v::AbstractString,
+    d::AbstractString,
+    j::AbstractString,
+    output::AbstractString,
+) where T <: AbstractIgBLAST
+    return run_igblast(
+        T,
+        query,
+        v,
+        d,
+        j,
+        runner.aux,
+        output,
+        runner.num_threads;
+        outfmt=runner.outfmt,
+        additional_params=runner.additional_params,
+    )
+end
+
+"""
+    run_igblast(::Type{T}, query, v, d, j, output; kwargs...)
+
+Run IgBLAST **without** an auxiliary file.
+"""
 function run_igblast(
-    igblast_type::Type{T},
-    query_file::String,
-    v_database::String,
-    d_database::String,
-    j_database::String,
-    aux_file::String,
-    output_file::String,
-    num_threads::Int = Base.Threads.nthreads();
-    outfmt::Int = 19,
-    additional_params::Dict{String, String} = Dict{String, String}()
+    ::Type{T},
+    query::AbstractString,
+    v::AbstractString,
+    d::AbstractString,
+    j::AbstractString,
+    output::AbstractString;
+    num_threads::Integer=Base.Threads.nthreads(),
+    outfmt::Integer=19,
+    additional_params::Dict{String,String}=Dict{String,String}(),
+) where T <: AbstractIgBLAST
+    return run_igblast(
+        T, query, v, d, j, NoAuxiliary(), output, num_threads;
+        outfmt=outfmt, additional_params=additional_params,
+    )
+end
+
+"""
+    run_igblast(::Type{T}, query, v, d, j, output, num_threads; kwargs...)
+
+Run IgBLAST **without** an auxiliary file, with an explicit thread count.
+"""
+function run_igblast(
+    ::Type{T},
+    query::AbstractString,
+    v::AbstractString,
+    d::AbstractString,
+    j::AbstractString,
+    output::AbstractString,
+    num_threads::Integer;
+    outfmt::Integer=19,
+    additional_params::Dict{String,String}=Dict{String,String}(),
+) where T <: AbstractIgBLAST
+    return run_igblast(
+        T, query, v, d, j, NoAuxiliary(), output, num_threads;
+        outfmt=outfmt, additional_params=additional_params,
+    )
+end
+
+"""
+    run_igblast(::Type{T}, query, v, d, j, aux, output, num_threads=...; kwargs...)
+
+Run IgBLAST with optional auxiliary data.
+
+`aux` may be:
+- omitted (use the 5-path methods above)
+- `nothing` or `NoAuxiliary()` / `noauxiliary`
+- an `AuxiliaryFile`
+- a non-empty path `AbstractString`
+- `""` (treated as no auxiliary, for backward compatibility)
+"""
+function run_igblast(
+    ::Type{T},
+    query::AbstractString,
+    v::AbstractString,
+    d::AbstractString,
+    j::AbstractString,
+    aux::Union{AbstractAuxiliary,Nothing,AbstractString},
+    output::AbstractString,
+    num_threads::Integer=Base.Threads.nthreads();
+    outfmt::Integer=19,
+    additional_params::Dict{String,String}=Dict{String,String}(),
+) where T <: AbstractIgBLAST
+    return run_igblast(
+        T,
+        query,
+        GermlineDatabases(v, d, j),
+        normalize_auxiliary(aux),
+        output,
+        num_threads;
+        outfmt=outfmt,
+        additional_params=additional_params,
+    )
+end
+
+"""
+    run_igblast(::Type{T}, query, germlines, aux, output, num_threads=...; kwargs...)
+
+Core method: typed germline databases and normalized auxiliary data.
+"""
+function run_igblast(
+    ::Type{T},
+    query::AbstractString,
+    germlines::GermlineDatabases,
+    aux::AbstractAuxiliary,
+    output::AbstractString,
+    num_threads::Integer=Base.Threads.nthreads();
+    outfmt::Integer=19,
+    additional_params::Dict{String,String}=Dict{String,String}(),
 ) where T <: AbstractIgBLAST
 
-    if !is_igblast_installed()
-        error("IgBLAST is not installed. Please run install_igblast() first.")
-    end
+    is_igblast_installed() || error("IgBLAST is not installed. Please run install_igblast() first.")
+    isfile(query) || throw(ArgumentError("Query file does not exist: $query"))
+    validate_inputs(germlines)
+    validate_inputs(aux)
+    num_threads > 0 || throw(ArgumentError("Number of threads must be positive"))
 
-    @assert isfile(query_file) "Query file does not exist: $query_file"
-    @assert isfile(v_database) "V database file does not exist: $v_database"
-    @assert isfile(d_database) "D database file does not exist: $d_database"
-    @assert isfile(j_database) "J database file does not exist: $j_database"
-    if aux_file != ""
-        @assert isfile(aux_file) "Auxiliary file does not exist: $aux_file"
-    end
-    @assert num_threads > 0 "Number of threads must be positive"
-
-    output_dir = dirname(output_file)
-    if !isdir(output_dir)
+    output_dir = dirname(output)
+    if !isempty(output_dir) && !isdir(output_dir)
         @info "Creating output directory: $output_dir"
         mkpath(output_dir)
     end
 
-    igblast_path = artifact"IgBLAST"
-    bin_path = joinpath(igblast_path, "ncbi-igblast-$IGBLAST_VERSION", "bin")
-    igblast_exe = joinpath(bin_path, executable(igblast_type))
-    makeblastdb = joinpath(bin_path, "makeblastdb")
+    igblast_exe = executable_path(T)
+    makeblastdb = makeblastdb_path()
+    isfile(igblast_exe) || error("IgBLAST executable does not exist: $igblast_exe")
+    isfile(makeblastdb) || error("makeblastdb executable does not exist: $makeblastdb")
 
-    @assert isfile(igblast_exe) "IgBLAST executable does not exist: $igblast_exe"
-    @assert isfile(makeblastdb) "makeblastdb executable does not exist: $makeblastdb"
+    set_igdata!()
 
-    ENV["IGDATA"] = joinpath(igblast_path, "ncbi-igblast-$IGBLAST_VERSION")
-
-    temp_dir = mktempdir()
-    process = nothing
-    monitor_task = nothing
-
-    try
+    mktempdir() do temp_dir
         temp_query = joinpath(temp_dir, "query.fasta")
-        copy_and_decompress(query_file, temp_query)
+        copy_and_decompress(query, temp_query)
 
-        # For IgBLASTp, translate nucleotide databases to protein (IgBLASTp requires protein databases)
-        # For IgBLASTn, use nucleotide databases as-is
-        temp_v_db = prepare_db(makeblastdb, v_database, "V", temp_dir, is_protein=(igblast_type == IgBLASTp))
-        temp_d_db = prepare_db(makeblastdb, d_database, "D", temp_dir, is_protein=(igblast_type == IgBLASTp))
-        temp_j_db = prepare_db(makeblastdb, j_database, "J", temp_dir, is_protein=(igblast_type == IgBLASTp))
+        v_db, d_db, j_db = prepare_databases(T, makeblastdb, germlines, temp_dir)
+        staged_aux = stage_auxiliary(aux, temp_dir)
 
-        # Prepare auxiliary file if provided
-        temp_aux = nothing
-        if aux_file != ""
-            temp_aux = joinpath(temp_dir, "aux_file")
-            cp(aux_file, temp_aux)
-        end
-
-        # Build command based on IgBLAST type
-        if igblast_type == IgBLASTp
-            # IgBLASTp doesn't support auxiliary_data parameter
-            cmd = `$igblast_exe -germline_db_V $temp_v_db -query $temp_query -outfmt 7
-            -num_threads $num_threads -out $output_file`
-        else
-            cmd = `$igblast_exe -germline_db_V $temp_v_db -germline_db_D $temp_d_db -germline_db_J $temp_j_db
-            -query $temp_query -outfmt $outfmt
-            -num_threads $num_threads -out $output_file`
-            
-            # Add auxiliary_data only if aux_file is provided (only for IgBLASTn)
-            if temp_aux !== nothing
-                cmd = `$cmd -auxiliary_data $temp_aux`
-            end
-        end
-
-        for (key, value) in additional_params
-            if value == ""
-                cmd = `$cmd -$key`
-            else
-                cmd = `$cmd -$key $value`
-            end
-        end
+        cmd = build_command(
+            T,
+            igblast_exe,
+            temp_query,
+            v_db,
+            d_db,
+            j_db,
+            staged_aux,
+            output,
+            num_threads,
+            outfmt,
+            additional_params,
+        )
 
         total_sequences = count_fasta_sequences(temp_query)
-        p = Progress(total_sequences; desc="Running IgBLAST... ", color=:green)
-        done_channel = Channel{Bool}(1)
-
-        monitor_task = @async begin
-            try
-                processed_sequences = 0
-                last_position = 0
-                while true
-                    if isfile(output_file)
-                        open(output_file, "r") do f
-                            seekend(f)
-                            if position(f) > last_position
-                                seek(f, last_position)
-                                for line in eachline(f)
-                                    if !startswith(line, '#')
-                                        processed_sequences += 1
-                                        update!(p, processed_sequences)
-                                    end
-                                end
-                                last_position = position(f)
-                            end
-                        end
-                    end
-                    if processed_sequences >= total_sequences
-                        finish!(p)
-                        put!(done_channel, true)
-                        break
-                    end
-                    sleep(0.1)
-                end
-            catch e
-                if !(e isa InterruptException)
-                    @error "Error in progress monitoring task" exception=(e, catch_backtrace())
-                end
-            end
-        end
-
-        out = IOBuffer()
-        err = IOBuffer()
-        process = run(pipeline(cmd, stdout=out, stderr=err), wait=false)
-
-        while process_running(process)
-            if isready(done_channel)
-                break
-            end
-            sleep(0.1)
-        end
-
-        wait(process)
-
-        if !istaskdone(monitor_task)
-            schedule(monitor_task, InterruptException(), error=true)
-        end
-
-        if !success(process)
-            error_output = String(take!(err))
-            error("$(error_output)\nIgBLAST execution failed. Check the error message above.")
-        end
-
-        @info "IgBLAST analysis completed. Output saved to $output_file"
-
-    catch e
-        if e isa InterruptException
-            @warn "IgBLAST analysis interrupted by user."
-        else
-            @error "Error running IgBLAST" exception=(e, catch_backtrace())
-        end
-        rethrow(e)
-    finally
-        if process !== nothing && process_running(process)
-            kill(process)
-        end
-        if monitor_task !== nothing && !istaskdone(monitor_task)
-            schedule(monitor_task, InterruptException(), error=true)
-        end
-        rm(temp_dir, recursive=true)
+        run_process(cmd, output, total_sequences)
     end
+
+    @info "IgBLAST analysis completed. Output saved to $output"
+    return output
 end
