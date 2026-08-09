@@ -91,7 +91,7 @@ function run_igblast(
     additional_params::Dict{String,String}=Dict{String,String}(),
 ) where T <: AbstractIgBLAST
 
-    is_igblast_installed() || error("IgBLAST is not installed. Please run install_igblast() first.")
+    is_igblast_installed() || error("IgBLAST is not installed. Call install_igblast() or reload the package.")
     isfile(query) || throw(ArgumentError("Query file does not exist: $query"))
     validate_inputs(germlines)
     validate_inputs(aux)

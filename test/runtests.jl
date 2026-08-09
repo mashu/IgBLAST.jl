@@ -17,20 +17,6 @@ end
         @test is_igblast_installed() == true
     end
 
-    @testset "Platform archive suffixes" begin
-        @test IgBLAST.platform_archive_suffix(:linux, "x86_64") == "x64-linux.tar.gz"
-        @test IgBLAST.platform_archive_suffix(:apple, "x86_64") == "x64-macosx.tar.gz"
-        @test_throws ErrorException IgBLAST.platform_archive_suffix(:apple, "aarch64")
-        @test_throws ErrorException IgBLAST.platform_archive_suffix(:windows, "x86_64")
-        @test_throws ErrorException IgBLAST.platform_archive_suffix(:linux, "aarch64")
-        @test_throws ErrorException IgBLAST.platform_archive_suffix(:unknown, "x86_64")
-
-        @test occursin("x64-linux.tar.gz", IgBLAST.get_igblast_url(:linux, "x86_64"))
-        @test occursin("x64-macosx.tar.gz", IgBLAST.get_igblast_url(:apple, "x86_64"))
-        @test_throws ErrorException IgBLAST.get_igblast_url(:windows, "x86_64")
-        @test_throws ErrorException IgBLAST.get_igblast_url(:apple, "aarch64")
-    end
-
     @testset "native_executable" begin
         @test IgBLAST.native_executable("igblastn"; windows=false) == "igblastn"
         @test IgBLAST.native_executable("igblastn"; windows=true) == "igblastn.exe"
@@ -103,11 +89,6 @@ end
     end
 
     @testset "Utility Functions" begin
-        @test IgBLAST.get_igblast_url() isa String
-        @test IgBLAST.platform_archive_suffix() isa String
-        @test IgBLAST.detect_os() in (:linux, :apple, :windows, :unknown)
-        @test IgBLAST.detect_arch() isa AbstractString
-
         temp_fasta = tempname() * ".fasta"
         open(temp_fasta, "w") do io
             for i in 1:10

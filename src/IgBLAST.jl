@@ -35,11 +35,8 @@ module IgBLAST
 
 using Artifacts
 using CodecZlib
-using TranscodingStreams
-using Pkg.BinaryPlatforms
 using ProgressMeter
 import Pkg: ensure_artifact_installed
-import Pkg.BinaryPlatforms: platform_key_abi
 using BioSequences
 using FASTX
 
