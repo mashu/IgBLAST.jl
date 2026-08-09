@@ -4,3 +4,13 @@
 /Manifest.toml
 /docs/Manifest.toml
 /docs/build/
+
+# Local germline / IMGT / analysis artifacts — never commit
+/data/
+/figures/
+/thera_sabdab_results/
+/deps/
+/test.tsv
+*.fasta
+*.fasta.gz
+*.aux
