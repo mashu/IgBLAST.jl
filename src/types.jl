@@ -208,7 +208,18 @@ Compression encoding inferred from a path (e.g. `.gz`).
 """
 abstract type AbstractFileEncoding end
 
+"""
+    PlainEncoding
+
+Uncompressed file encoding (default when the path does not end in `.gz`).
+"""
 struct PlainEncoding <: AbstractFileEncoding end
+
+"""
+    GzipEncoding
+
+Gzip-compressed file encoding, used when a path ends in `.gz`.
+"""
 struct GzipEncoding <: AbstractFileEncoding end
 
 """
