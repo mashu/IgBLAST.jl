@@ -19,10 +19,10 @@ Pkg.add("IgBLAST")
 
 ## Quick start
 
+Binaries install automatically on first `using IgBLAST`.
+
 ```julia
 using IgBLAST
-
-install_igblast()
 
 # No auxiliary file
 run_igblast(

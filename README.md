@@ -17,6 +17,17 @@ A Julia package for running IgBLAST (v1.22.0) analyses on immunoglobulin (Ig) an
 - Callable `IgBLASTRunner` for repeated configured runs
 - Progress monitoring for long-running analyses
 
+## Supported platforms
+
+| OS | Architecture | Status |
+|----|--------------|--------|
+| Linux | x86_64 | Supported |
+| macOS | x86_64 | Supported |
+| macOS | ARM (Apple Silicon) | Not supported (no NCBI ARM binary; Rosetta 2 / x86_64 Julia may work) |
+| Windows | x86_64 | Not supported yet |
+
+IgBLAST binaries are installed automatically from NCBI via Julia artifacts (v1.22.0).
+
 ## Installation
 
 ```julia
@@ -26,11 +37,7 @@ Pkg.add("IgBLAST")
 
 ## Quick Start
 
-```julia
-using IgBLAST
-
-install_igblast()
-```
+Binaries install automatically on first `using IgBLAST`. Then run analyses:
 
 ### Nucleotide assignment (IgBLASTn)
 

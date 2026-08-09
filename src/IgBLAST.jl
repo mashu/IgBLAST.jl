@@ -18,8 +18,6 @@ Prefer [`IgBLASTRunner`](@ref) for repeated configured runs.
 ```julia
 using IgBLAST
 
-install_igblast()
-
 # No auxiliary file (plain or gzip query/output autodetected from extension)
 run_igblast(IgBLASTn, "query.fasta.gz", "V.fasta", "D.fasta", "J.fasta", "out.tsv.gz";
             additional_params = Dict("organism" => "human", "domain_system" => "imgt"))

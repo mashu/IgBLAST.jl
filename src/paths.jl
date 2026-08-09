@@ -1,9 +1,10 @@
 """
-    native_executable(name::AbstractString)
+    native_executable(name::AbstractString; windows::Bool=Sys.iswindows())
 
 Append `.exe` on Windows; otherwise return `name` unchanged.
 """
-native_executable(name::AbstractString) = Sys.iswindows() ? string(name, ".exe") : string(name)
+native_executable(name::AbstractString; windows::Bool=Sys.iswindows()) =
+    windows ? string(name, ".exe") : string(name)
 
 """
     artifact_root()

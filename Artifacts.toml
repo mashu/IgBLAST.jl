@@ -1,6 +1,18 @@
-[IgBLAST]
+[[IgBLAST]]
+arch = "x86_64"
 git-tree-sha1 = "608cdcf04bdc6bb83bad7450111443e5697b5d15"
+libc = "glibc"
+os = "linux"
 
     [[IgBLAST.download]]
     sha256 = "d54f1e1001fff529811c933595ef3c2322961c82b2d37a53f7a7914cd5807449"
     url = "https://ftp.ncbi.nih.gov/blast/executables/igblast/release/1.22.0/ncbi-igblast-1.22.0-x64-linux.tar.gz"
+
+[[IgBLAST]]
+arch = "x86_64"
+git-tree-sha1 = "82fe3f91d2de837119efca5874644eaa9ae7a44d"
+os = "macos"
+
+    [[IgBLAST.download]]
+    sha256 = "b8a0034642b5dbef7f41c7fcfbb4bc035d2c5877d3e987af43605ea8e3d55c40"
+    url = "https://ftp.ncbi.nih.gov/blast/executables/igblast/release/1.22.0/ncbi-igblast-1.22.0-x64-macosx.tar.gz"

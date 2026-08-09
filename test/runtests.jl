@@ -17,8 +17,96 @@ end
         @test is_igblast_installed() == true
     end
 
+    @testset "Platform archive suffixes" begin
+        @test IgBLAST.platform_archive_suffix(:linux, "x86_64") == "x64-linux.tar.gz"
+        @test IgBLAST.platform_archive_suffix(:apple, "x86_64") == "x64-macosx.tar.gz"
+        @test_throws ErrorException IgBLAST.platform_archive_suffix(:apple, "aarch64")
+        @test_throws ErrorException IgBLAST.platform_archive_suffix(:windows, "x86_64")
+        @test_throws ErrorException IgBLAST.platform_archive_suffix(:linux, "aarch64")
+        @test_throws ErrorException IgBLAST.platform_archive_suffix(:unknown, "x86_64")
+
+        @test occursin("x64-linux.tar.gz", IgBLAST.get_igblast_url(:linux, "x86_64"))
+        @test occursin("x64-macosx.tar.gz", IgBLAST.get_igblast_url(:apple, "x86_64"))
+        @test_throws ErrorException IgBLAST.get_igblast_url(:windows, "x86_64")
+        @test_throws ErrorException IgBLAST.get_igblast_url(:apple, "aarch64")
+    end
+
+    @testset "native_executable" begin
+        @test IgBLAST.native_executable("igblastn"; windows=false) == "igblastn"
+        @test IgBLAST.native_executable("igblastn"; windows=true) == "igblastn.exe"
+    end
+
+    @testset "install_igblast install path (injected)" begin
+        fake_sha = Base.SHA1(fill(0x11, 20))
+        root = mktempdir()
+        bin = joinpath(root, "ncbi-igblast-$(IgBLAST.IGBLAST_VERSION)", "bin")
+        mkpath(bin)
+        touch(joinpath(bin, IgBLAST.native_executable("igblastn")))
+
+        toml = joinpath(root, "Artifacts.toml")
+        write(toml, """
+        [IgBLAST]
+        git-tree-sha1 = "1111111111111111111111111111111111111111"
+        """)
+
+        called = Ref(false)
+        fake_ensure = function (name, path)
+            called[] = true
+            @test name == "IgBLAST"
+            @test path == toml
+            return nothing
+        end
+
+        sha = install_igblast(;
+            already_installed=() -> false,
+            artifact_toml=toml,
+            ensure_fn=fake_ensure,
+            artifact_hash_fn=(_, _) -> fake_sha,
+            artifact_path_fn=_ -> root,
+        )
+        @test sha == fake_sha
+        @test called[]
+
+        # Missing binary after ensure should error
+        empty_root = mktempdir()
+        @test_throws ErrorException install_igblast(;
+            already_installed=() -> false,
+            artifact_toml=toml,
+            ensure_fn=fake_ensure,
+            artifact_hash_fn=(_, _) -> fake_sha,
+            artifact_path_fn=_ -> empty_root,
+        )
+
+        # Missing Artifacts.toml entry should error
+        empty_toml = joinpath(empty_root, "empty.toml")
+        write(empty_toml, "")
+        @test_throws ErrorException install_igblast(;
+            already_installed=() -> false,
+            artifact_toml=empty_toml,
+        )
+
+        rm(root; recursive=true)
+        rm(empty_root; recursive=true)
+    end
+
+    @testset "verify_igblast_installation" begin
+        root = mktempdir()
+        sha = Base.SHA1(fill(0x22, 20))
+        @test_throws ErrorException IgBLAST.verify_igblast_installation(sha; artifact_path_fn=_ -> root)
+
+        bin = joinpath(root, "ncbi-igblast-$(IgBLAST.IGBLAST_VERSION)", "bin")
+        mkpath(bin)
+        exe = joinpath(bin, IgBLAST.native_executable("igblastn"))
+        touch(exe)
+        @test IgBLAST.verify_igblast_installation(sha; artifact_path_fn=_ -> root) == exe
+        rm(root; recursive=true)
+    end
+
     @testset "Utility Functions" begin
         @test IgBLAST.get_igblast_url() isa String
+        @test IgBLAST.platform_archive_suffix() isa String
+        @test IgBLAST.detect_os() in (:linux, :apple, :windows, :unknown)
+        @test IgBLAST.detect_arch() isa AbstractString
 
         temp_fasta = tempname() * ".fasta"
         open(temp_fasta, "w") do io
