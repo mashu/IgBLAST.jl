@@ -11,12 +11,11 @@ A Julia package for running IgBLAST (v1.22.0) analyses on immunoglobulin (Ig) an
 ## Features
 
 - Automatic installation and management of IgBLAST binaries
+- `prepare(...) do ig` prepares BLAST databases once; they are deleted when the block returns
+- `command(ig, query, output)` is the raw NCBI command (plain files, no Julia gzip)
 - Support for both IgBLASTn and IgBLASTp via multiple dispatch
-- Optional auxiliary file — omit by default; supply a custom one only when needed
-- Gzip autodetection for query FASTA (`.fasta.gz`) and result TSV (`.tsv.gz`)
-- Typed germlines: `VDJGermlines` / `VGermlines`
-- Callable `IgBLASTRunner` for repeated configured runs
-- Progress monitoring for long-running analyses
+- Optional auxiliary file
+- Gzip autodetection for query FASTA (`.fasta.gz`) and result TSV (`.tsv.gz`) on the session call
 
 ## Supported platforms
 
@@ -38,82 +37,70 @@ Pkg.add("IgBLAST")
 
 ## Quick Start
 
-Binaries install automatically on first `using IgBLAST`. Then run analyses:
+Binaries install automatically on first `using IgBLAST`. Prepare databases once, then run:
 
 ### Nucleotide assignment (IgBLASTn)
 
-Auxiliary data is optional. Prefer omitting it unless you need a custom aux file.
-Gzip compression for query/output is autodetected from a `.gz` suffix:
-
 ```julia
-# No auxiliary file
-run_igblast(
-    IgBLASTn,
-    "query.fasta",
-    "V.fasta",
-    "D.fasta",
-    "J.fasta",
-    "output.tsv";
-    additional_params = Dict("organism" => "human", "domain_system" => "imgt"),
-)
+using IgBLAST
 
-# Compressed query and/or output
-run_igblast(
-    IgBLASTn,
-    "query.fasta.gz",
-    "V.fasta",
-    "D.fasta",
-    "J.fasta",
-    "output.tsv.gz";
-    additional_params = Dict("organism" => "human", "domain_system" => "imgt"),
-)
+dbs = VDJGermlines("V.fasta", "D.fasta", "J.fasta")
+params = Dict("organism" => "human", "domain_system" => "imgt")
+
+prepare(IgBLASTn, dbs; additional_params=params) do ig
+    ig("query.fasta", "output.tsv")
+end
+
+# Gzip query and/or output (autodetected from `.gz`)
+prepare(IgBLASTn, dbs; additional_params=params) do ig
+    ig("query.fasta.gz", "output.tsv.gz")
+end
 
 # Custom auxiliary file
-run_igblast(
-    IgBLASTn,
-    "query.fasta",
-    "V.fasta",
-    "D.fasta",
-    "J.fasta",
-    "human_gl.aux",
-    "output.tsv";
-    additional_params = Dict("organism" => "human", "domain_system" => "imgt"),
-)
-
-# Typed germlines
-dbs = VDJGermlines("V.fasta", "D.fasta", "J.fasta")
-run_igblast(IgBLASTn, "query.fasta", dbs, "output.tsv")
+prepare(IgBLASTn, dbs; aux="human_gl.aux", additional_params=params) do ig
+    ig("query.fasta", "output.tsv")
+end
 ```
 
-### Callable runner
+Path arguments are also accepted: `prepare(IgBLASTn, v, d, j; ...) do ig ... end`.
+
+### Timing only the IgBLAST command
+
+`makeblastdb` runs **before** the `do` block. Inside it, time NCBI IgBLAST writing a plain file — no Julia gzip, no extra copies, no chunking:
 
 ```julia
-runner = IgBLASTRunner(IgBLASTn; additional_params=Dict("organism"=>"human"))
-runner("query.fasta", "V.fasta", "D.fasta", "J.fasta", "out.tsv")
+using IgBLAST
 
-runner_aux = IgBLASTRunner(IgBLASTn; aux="human_gl.aux")
-runner_aux("query.fasta", VDJGermlines("V.fasta", "D.fasta", "J.fasta"), "out.tsv")
+dbs = VDJGermlines("V.fasta", "D.fasta", "J.fasta")
+params = Dict("organism" => "human", "domain_system" => "imgt")
+
+seconds = prepare(IgBLASTn, dbs; additional_params=params, num_threads=8) do ig
+    @elapsed run(command(ig, "query.fasta", "output.tsv"))
+end
+
+println("igblastn wall time: ", round(seconds; digits=3), " s")
 ```
+
+Use **uncompressed** `.fasta` / `.tsv` for this. `command` is the raw `igblastn`/`igblastp` `Cmd`. For everyday use (including `.gz`), `ig("query.fasta", "output.tsv")` is enough.
+
+Fair comparisons: one process, one query file, one output file; parallelize with `-num_threads`, not by splitting FASTA in Julia.
 
 ### Protein assignment (IgBLASTp)
 
 Query sequences must be amino acids; the V germline FASTA should be nucleotide (translated when building the BLAST DB). Only V is used:
 
 ```julia
-run_igblast(
-    IgBLASTp,
-    "query_protein.fasta",
-    "V_nucleotide.fasta",
-    "output.tsv";
-    additional_params = Dict("organism" => "human"),
-)
+prepare(IgBLASTp, VGermlines("V_nucleotide.fasta");
+        additional_params=Dict("organism" => "human")) do ig
+    ig("query_protein.fasta", "output.tsv")
+end
 ```
 
 **Notes:**
 - `IgBLASTn`: nucleotide query and V/D/J databases.
 - `IgBLASTp`: protein query; only V germline is prepared/used.
-- Paths ending in `.gz` are treated as gzip for both query input and result output.
-- Empty string `""` for aux remains accepted for backward compatibility.
+- Paths ending in `.gz` are treated as gzip on `ig(query, output)`. `command` always expects uncompressed paths.
+- NCBI IgBLAST does not read or write gzip; compression is only the Julia convenience path.
 
 ## License
 

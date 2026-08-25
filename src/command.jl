@@ -1,11 +1,26 @@
 """
+    append_param(cmd, key, value)
+
+Append one IgBLAST CLI argument. An empty `value` is a flag (`-key`).
+Emptiness is string content, not a type, so it cannot be dispatched.
+"""
+append_param(cmd::Cmd, key::AbstractString, value::AbstractString) =
+    append_param(cmd, key, value, Val(isempty(value)))
+
+append_param(cmd::Cmd, key::AbstractString, ::AbstractString, ::Val{true}) =
+    `$cmd -$key`
+
+append_param(cmd::Cmd, key::AbstractString, value::AbstractString, ::Val{false}) =
+    `$cmd -$key $value`
+
+"""
     append_params(cmd, params)
 
-Append additional IgBLAST CLI parameters. Empty values become flags.
+Append additional IgBLAST CLI parameters.
 """
 function append_params(cmd::Cmd, params::AbstractDict{<:AbstractString,<:AbstractString})
     for (key, value) in params
-        cmd = isempty(value) ? `$cmd -$key` : `$cmd -$key $value`
+        cmd = append_param(cmd, key, value)
     end
     return cmd
 end
@@ -22,12 +37,11 @@ function apply_auxiliary(cmd::Cmd, aux::AuxiliaryFile)
 end
 
 """
-    build_command(::Type{IgBLASTn}, exe, query, dbs, aux, output, num_threads, outfmt, params)
+    build_command(exe, query, dbs, aux, output, num_threads, outfmt, params)
 
-Build an `igblastn` command. Auxiliary data is optional.
+Build an IgBLAST `Cmd`, dispatching on the prepared database kind.
 """
 function build_command(
-    ::Type{IgBLASTn},
     exe::AbstractString,
     query::AbstractString,
     dbs::PreparedVDJ,
@@ -43,24 +57,18 @@ function build_command(
     return append_params(cmd, additional_params)
 end
 
-"""
-    build_command(::Type{IgBLASTp}, exe, query, dbs, output, num_threads, params)
-
-Build an `igblastp` command. Only the V germline database is used.
-"""
 function build_command(
-    ::Type{IgBLASTp},
     exe::AbstractString,
     query::AbstractString,
     dbs::PreparedV,
-    ::AbstractAuxiliary,
+    aux::AbstractAuxiliary,
     output::AbstractString,
     num_threads::Integer,
-    ::Integer,
+    outfmt::Integer,
     additional_params::AbstractDict{<:AbstractString,<:AbstractString},
 )
-    outfmt = default_outfmt(IgBLASTp)
     cmd = `$exe -germline_db_V $(dbs.v) -query $query -outfmt $outfmt
            -num_threads $num_threads -out $output`
+    cmd = apply_auxiliary(cmd, aux)
     return append_params(cmd, additional_params)
 end

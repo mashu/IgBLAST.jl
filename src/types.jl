@@ -55,14 +55,51 @@ Molecule kind required by germline databases for this variant.
 molecule(::Type{IgBLASTn}) = DNAMolecule()
 molecule(::Type{IgBLASTp}) = ProteinMolecule()
 
+"""
+    blastdb_type(molecule) -> String
+
+`makeblastdb -dbtype` for this molecule kind.
+"""
+blastdb_type(::DNAMolecule) = "nucl"
+blastdb_type(::ProteinMolecule) = "prot"
+
+# --- Auxiliary capability (trait) ---
+
+"""
+    AbstractAuxiliaryCapability
+
+Whether an IgBLAST variant accepts `-auxiliary_data`.
+"""
+abstract type AbstractAuxiliaryCapability end
+
+struct AuxiliarySupported <: AbstractAuxiliaryCapability end
+struct AuxiliaryUnsupported <: AbstractAuxiliaryCapability end
+
+"""
+    auxiliary_capability(::Type{<:AbstractIgBLAST})
+
+Auxiliary-data capability trait for the variant.
+"""
+auxiliary_capability(::Type{IgBLASTn}) = AuxiliarySupported()
+auxiliary_capability(::Type{IgBLASTp}) = AuxiliaryUnsupported()
+
+"""
+    supports_auxiliary(::Type{<:AbstractIgBLAST}) -> Bool
+
+Whether this variant accepts `-auxiliary_data`.
+"""
+supports_auxiliary(::Type{T}) where T <: AbstractIgBLAST =
+    supports_auxiliary(auxiliary_capability(T))
+supports_auxiliary(::AuxiliarySupported) = true
+supports_auxiliary(::AuxiliaryUnsupported) = false
+
 # --- Auxiliary data (optional) ---
 
 """
     AbstractAuxiliary
 
 Optional IgBLAST auxiliary (J-gene) annotation data.
-Omit aux, or pass [`NoAuxiliary`](@ref) / [`noauxiliary`](@ref), unless a custom
-[`AuxiliaryFile`](@ref) is required.
+Defaults to [`NoAuxiliary`](@ref); pass [`AuxiliaryFile`](@ref) only when needed.
 """
 abstract type AbstractAuxiliary end
 
@@ -81,7 +118,7 @@ Singleton [`NoAuxiliary`](@ref) instance.
 const noauxiliary = NoAuxiliary()
 
 """
-    AuxiliaryFile{P<:AbstractString}
+    AuxiliaryFile{P}
 
 Path to a custom IgBLAST auxiliary data file.
 """
@@ -90,32 +127,29 @@ struct AuxiliaryFile{P<:AbstractString} <: AbstractAuxiliary
 end
 
 """
-    supports_auxiliary(::Type{<:AbstractIgBLAST}) -> Bool
-
-Whether this variant accepts `-auxiliary_data`.
-"""
-supports_auxiliary(::Type{<:AbstractIgBLAST}) = false
-supports_auxiliary(::Type{IgBLASTn}) = true
-
-"""
     normalize_auxiliary(aux) -> AbstractAuxiliary
 
-Normalize `nothing`, empty string, path, or auxiliary values to [`AbstractAuxiliary`](@ref).
+Normalize a path or auxiliary value to [`AbstractAuxiliary`](@ref).
 """
-normalize_auxiliary(::Nothing) = NoAuxiliary()
 normalize_auxiliary(::NoAuxiliary) = NoAuxiliary()
 normalize_auxiliary(aux::AuxiliaryFile) = aux
-
-function normalize_auxiliary(path::AbstractString)
-    isempty(path) && return NoAuxiliary()
-    return AuxiliaryFile(path)
-end
+normalize_auxiliary(path::AbstractString) = AuxiliaryFile(path)
 
 validate_inputs(::NoAuxiliary) = nothing
 
 function validate_inputs(aux::AuxiliaryFile)
     isfile(aux.path) || throw(ArgumentError("Auxiliary file does not exist: $(aux.path)"))
     return nothing
+end
+
+validate_auxiliary(::Type{T}, aux::AbstractAuxiliary) where T <: AbstractIgBLAST =
+    validate_auxiliary(auxiliary_capability(T), aux, T)
+
+validate_auxiliary(::AuxiliarySupported, aux::AbstractAuxiliary, ::Type) = validate_inputs(aux)
+validate_auxiliary(::AuxiliaryUnsupported, ::NoAuxiliary, ::Type) = nothing
+
+function validate_auxiliary(::AuxiliaryUnsupported, ::AuxiliaryFile, ::Type{T}) where T
+    throw(ArgumentError("$(executable(T)) does not accept auxiliary data"))
 end
 
 # --- Germline databases ---
@@ -128,31 +162,24 @@ Abstract germline FASTA collection used by an IgBLAST variant.
 abstract type AbstractGermlines end
 
 """
-    VGermlines{P<:AbstractString}
+    VGermlines{V}
 
 V-only germline FASTA (used by [`IgBLASTp`](@ref)).
 """
-struct VGermlines{P<:AbstractString} <: AbstractGermlines
-    v::P
+struct VGermlines{V<:AbstractString} <: AbstractGermlines
+    v::V
 end
 
 """
-    VDJGermlines{P<:AbstractString}
+    VDJGermlines{V,D,J}
 
 V, D, and J germline FASTA paths (used by [`IgBLASTn`](@ref)).
 """
-struct VDJGermlines{P<:AbstractString} <: AbstractGermlines
-    v::P
-    d::P
-    j::P
+struct VDJGermlines{V<:AbstractString,D<:AbstractString,J<:AbstractString} <: AbstractGermlines
+    v::V
+    d::D
+    j::J
 end
-
-"""
-    GermlineDatabases
-
-Deprecated alias for [`VDJGermlines`](@ref).
-"""
-const GermlineDatabases = VDJGermlines
 
 function validate_inputs(db::VGermlines)
     isfile(db.v) || throw(ArgumentError("V database file does not exist: $(db.v)"))
@@ -167,16 +194,13 @@ function validate_inputs(db::VDJGermlines)
 end
 
 """
-    germlines_for(::Type{<:AbstractIgBLAST}, v, d, j)
+    germlines_for(::Type{IgBLASTn}, v, d, j)
+    germlines_for(::Type{IgBLASTp}, v)
 
 Build the germline collection appropriate for the IgBLAST variant.
-`IgBLASTp` keeps only V.
 """
 germlines_for(::Type{IgBLASTn}, v::AbstractString, d::AbstractString, j::AbstractString) =
     VDJGermlines(v, d, j)
-
-germlines_for(::Type{IgBLASTp}, v::AbstractString, ::AbstractString, ::AbstractString) =
-    VGermlines(v)
 
 germlines_for(::Type{IgBLASTp}, v::AbstractString) = VGermlines(v)
 
@@ -185,18 +209,18 @@ germlines_for(::Type{IgBLASTp}, v::AbstractString) = VGermlines(v)
 """
     AbstractPreparedDB
 
-Prepared BLAST database paths produced for a specific IgBLAST variant.
+Prepared BLAST database prefixes produced for a specific IgBLAST variant.
 """
 abstract type AbstractPreparedDB end
 
-struct PreparedVDJ{P<:AbstractString} <: AbstractPreparedDB
-    v::P
-    d::P
-    j::P
+struct PreparedVDJ{V,D,J} <: AbstractPreparedDB
+    v::V
+    d::D
+    j::J
 end
 
-struct PreparedV{P<:AbstractString} <: AbstractPreparedDB
-    v::P
+struct PreparedV{V} <: AbstractPreparedDB
+    v::V
 end
 
 # --- File encoding (query input / result output) ---
@@ -225,18 +249,11 @@ struct GzipEncoding <: AbstractFileEncoding end
 """
     file_encoding(path) -> AbstractFileEncoding
 
-Autodetect encoding from the filename (`*.gz` → [`GzipEncoding`](@ref)).
+Reify the filename suffix as an encoding type (`*.gz` → [`GzipEncoding`](@ref)).
+Callers then dispatch on that type.
 """
 file_encoding(path::AbstractString) =
-    endswith(lowercase(path), ".gz") ? GzipEncoding() : PlainEncoding()
+    gzip_suffix_encoding(Val(endswith(lowercase(path), ".gz")))
 
-# --- Output format (progress parsing) ---
-
-abstract type AbstractOutputFormat end
-struct AIRRFormat <: AbstractOutputFormat end
-struct CommentedTabularFormat <: AbstractOutputFormat end
-
-output_format(::Type{IgBLASTn}, outfmt::Integer) =
-    Int(outfmt) == 19 ? AIRRFormat() : CommentedTabularFormat()
-
-output_format(::Type{IgBLASTp}, ::Integer) = CommentedTabularFormat()
+gzip_suffix_encoding(::Val{true}) = GzipEncoding()
+gzip_suffix_encoding(::Val{false}) = PlainEncoding()

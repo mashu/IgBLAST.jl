@@ -1,46 +1,21 @@
 """
-    count_fasta_sequences(filename::AbstractString)
+    ensure_parent_directory(path)
 
-Count FASTA records in `filename` by counting header lines.
-Supports plain and gzip-compressed files (autodetected from the name).
+Create the parent directory of `path` when it is non-empty and missing.
 """
-count_fasta_sequences(filename::AbstractString) =
-    count_fasta_sequences(filename, file_encoding(filename))
-
-function count_fasta_sequences(filename::AbstractString, ::PlainEncoding)
-    count = 0
-    open(filename, "r") do file
-        for line in eachline(file)
-            startswith(line, '>') && (count += 1)
-        end
+function ensure_parent_directory(path::AbstractString)
+    dir = dirname(path)
+    if !isempty(dir) && !isdir(dir)
+        mkpath(dir)
     end
-    return count
-end
-
-function count_fasta_sequences(filename::AbstractString, ::GzipEncoding)
-    count = 0
-    open(GzipDecompressorStream, filename) do file
-        for line in eachline(file)
-            startswith(line, '>') && (count += 1)
-        end
-    end
-    return count
+    return nothing
 end
 
 """
-    stage_query(input_file, output_file, encoding)
+    stage_query(input_file, output_file, ::GzipEncoding)
 
-Copy or decompress a query FASTA into `output_file`, dispatching on encoding.
+Decompress a gzip FASTA into `output_file` for IgBLAST.
 """
-function stage_query(
-    input_file::AbstractString,
-    output_file::AbstractString,
-    ::PlainEncoding,
-)
-    cp(input_file, output_file)
-    return output_file
-end
-
 function stage_query(
     input_file::AbstractString,
     output_file::AbstractString,
@@ -55,31 +30,10 @@ function stage_query(
 end
 
 """
-    stage_query(input_file, output_file)
+    finalize_output(igblast_path, user_output, ::GzipEncoding)
 
-Infer encoding from the filename and stage the query for IgBLAST.
+Compress IgBLAST's plain output into the user-requested gzip path.
 """
-stage_query(input_file::AbstractString, output_file::AbstractString) =
-    stage_query(input_file, output_file, file_encoding(input_file))
-
-"""
-    igblast_output_path(user_output, temp_dir, encoding)
-
-Path where IgBLAST should write. For gzip outputs this is a temporary plain file.
-"""
-igblast_output_path(user_output::AbstractString, ::AbstractString, ::PlainEncoding) =
-    user_output
-
-igblast_output_path(::AbstractString, temp_dir::AbstractString, ::GzipEncoding) =
-    joinpath(temp_dir, "igblast_out")
-
-"""
-    finalize_output(igblast_path, user_output, encoding)
-
-Copy or compress IgBLAST's plain output into the user-requested path.
-"""
-finalize_output(::AbstractString, ::AbstractString, ::PlainEncoding) = nothing
-
 function finalize_output(
     igblast_path::AbstractString,
     user_output::AbstractString,

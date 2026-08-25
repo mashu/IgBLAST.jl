@@ -1,10 +1,13 @@
 """
-    native_executable(name::AbstractString; windows::Bool=Sys.iswindows())
+    native_executable(name, suffix)
 
 Append `.exe` on Windows; otherwise return `name` unchanged.
 """
+native_executable(name::AbstractString, ::Val{true}) = string(name, ".exe")
+native_executable(name::AbstractString, ::Val{false}) = name
+
 native_executable(name::AbstractString; windows::Bool=Sys.iswindows()) =
-    windows ? string(name, ".exe") : string(name)
+    native_executable(name, Val(windows))
 
 """
     artifact_root()

@@ -1,30 +1,20 @@
 """
-    prepare_db(makeblastdb, db_file, db_type, temp_dir, molecule)
+    source_fasta(db_file, temp_dir, db_type, molecule)
 
-Prepare a BLAST database from a FASTA file, dispatching on molecule kind.
+FASTA path to feed `makeblastdb`, dispatching on molecule kind.
+Nucleotide germlines are used in place; protein germlines are translated.
 """
-function prepare_db(
-    makeblastdb::AbstractString,
-    db_file::AbstractString,
-    db_type::AbstractString,
-    temp_dir::AbstractString,
-    ::DNAMolecule,
-)
-    temp_db = joinpath(temp_dir, "$(db_type)_db.fasta")
-    cp(db_file, temp_db; force=true)
-    run(`$makeblastdb -in $temp_db -dbtype nucl -parse_seqids`)
-    return temp_db
-end
+source_fasta(db_file::AbstractString, ::AbstractString, ::AbstractString, ::DNAMolecule) =
+    db_file
 
-function prepare_db(
-    makeblastdb::AbstractString,
+function source_fasta(
     db_file::AbstractString,
-    db_type::AbstractString,
     temp_dir::AbstractString,
+    db_type::AbstractString,
     ::ProteinMolecule,
 )
-    temp_db = joinpath(temp_dir, "$(db_type)_db.fasta")
-    open(FASTA.Writer, temp_db) do writer
+    translated = joinpath(temp_dir, "$(db_type)_prot.fasta")
+    open(FASTA.Writer, translated) do writer
         open(FASTA.Reader, db_file) do reader
             for record in reader
                 dna_seq = LongDNA{4}(sequence(record))
@@ -36,22 +26,39 @@ function prepare_db(
             end
         end
     end
-    run(`$makeblastdb -in $temp_db -dbtype prot -parse_seqids`)
-    return temp_db
+    return translated
 end
 
 """
-    prepare_databases(::Type{IgBLASTn}, makeblastdb, germlines, temp_dir)
+    prepare_db(makeblastdb, db_file, db_type, temp_dir, molecule)
 
-Prepare V, D, and J nucleotide BLAST databases.
+Build a BLAST database in `temp_dir`. Returns the database prefix.
+"""
+function prepare_db(
+    makeblastdb::AbstractString,
+    db_file::AbstractString,
+    db_type::AbstractString,
+    temp_dir::AbstractString,
+    mol::AbstractMolecule,
+)
+    src = source_fasta(db_file, temp_dir, db_type, mol)
+    prefix = joinpath(temp_dir, db_type)
+    dt = blastdb_type(mol)
+    run(`$makeblastdb -in $src -dbtype $dt -parse_seqids -out $prefix`)
+    return prefix
+end
+
+"""
+    prepare_databases(makeblastdb, germlines, temp_dir, molecule)
+
+Prepare BLAST databases for a germline collection.
 """
 function prepare_databases(
-    ::Type{IgBLASTn},
     makeblastdb::AbstractString,
     germlines::VDJGermlines,
     temp_dir::AbstractString,
+    mol::DNAMolecule,
 )
-    mol = molecule(IgBLASTn)
     return PreparedVDJ(
         prepare_db(makeblastdb, germlines.v, "V", temp_dir, mol),
         prepare_db(makeblastdb, germlines.d, "D", temp_dir, mol),
@@ -59,37 +66,11 @@ function prepare_databases(
     )
 end
 
-"""
-    prepare_databases(::Type{IgBLASTp}, makeblastdb, germlines, temp_dir)
-
-Prepare only the V protein BLAST database.
-"""
 function prepare_databases(
-    ::Type{IgBLASTp},
     makeblastdb::AbstractString,
     germlines::VGermlines,
     temp_dir::AbstractString,
+    mol::ProteinMolecule,
 )
-    mol = molecule(IgBLASTp)
     return PreparedV(prepare_db(makeblastdb, germlines.v, "V", temp_dir, mol))
-end
-
-prepare_databases(
-    ::Type{IgBLASTp},
-    makeblastdb::AbstractString,
-    germlines::VDJGermlines,
-    temp_dir::AbstractString,
-) = prepare_databases(IgBLASTp, makeblastdb, VGermlines(germlines.v), temp_dir)
-
-"""
-    stage_auxiliary(aux, temp_dir)
-
-Copy an auxiliary file into `temp_dir`, or return [`NoAuxiliary`](@ref).
-"""
-stage_auxiliary(::NoAuxiliary, ::AbstractString) = NoAuxiliary()
-
-function stage_auxiliary(aux::AuxiliaryFile, temp_dir::AbstractString)
-    temp_aux = joinpath(temp_dir, "aux_file")
-    cp(aux.path, temp_aux)
-    return AuxiliaryFile(temp_aux)
 end

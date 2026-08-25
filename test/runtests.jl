@@ -20,6 +20,8 @@ end
     @testset "native_executable" begin
         @test IgBLAST.native_executable("igblastn"; windows=false) == "igblastn"
         @test IgBLAST.native_executable("igblastn"; windows=true) == "igblastn.exe"
+        @test IgBLAST.native_executable("igblastn", Val(false)) == "igblastn"
+        @test IgBLAST.native_executable("igblastn", Val(true)) == "igblastn.exe"
     end
 
     @testset "install_igblast install path (injected)" begin
@@ -53,7 +55,6 @@ end
         @test sha == fake_sha
         @test called[]
 
-        # Missing binary after ensure should error
         empty_root = mktempdir()
         @test_throws ErrorException install_igblast(;
             already_installed=() -> false,
@@ -63,7 +64,6 @@ end
             artifact_path_fn=_ -> empty_root,
         )
 
-        # Missing Artifacts.toml entry should error
         empty_toml = joinpath(empty_root, "empty.toml")
         write(empty_toml, "")
         @test_throws ErrorException install_igblast(;
@@ -88,20 +88,7 @@ end
         rm(root; recursive=true)
     end
 
-    @testset "Utility Functions" begin
-        temp_fasta = tempname() * ".fasta"
-        open(temp_fasta, "w") do io
-            for i in 1:10
-                println(io, ">Sequence$i")
-                println(io, "ACGT" * repeat("N", i))
-            end
-        end
-
-        @test IgBLAST.count_fasta_sequences(temp_fasta) == 10
-        rm(temp_fasta)
-    end
-
-    @testset "Types, traits, and germlines" begin
+    @testset "Types and germlines" begin
         @test IgBLASTn <: AbstractIgBLAST
         @test IgBLASTp <: AbstractIgBLAST
         @test IgBLAST.executable(IgBLASTn) == "igblastn"
@@ -110,18 +97,18 @@ end
         @test IgBLAST.default_outfmt(IgBLASTp) == 7
         @test IgBLAST.supports_auxiliary(IgBLASTn)
         @test !IgBLAST.supports_auxiliary(IgBLASTp)
+        @test IgBLAST.auxiliary_capability(IgBLASTn) isa IgBLAST.AuxiliarySupported
+        @test IgBLAST.auxiliary_capability(IgBLASTp) isa IgBLAST.AuxiliaryUnsupported
         @test IgBLAST.molecule(IgBLASTn) isa IgBLAST.DNAMolecule
         @test IgBLAST.molecule(IgBLASTp) isa IgBLAST.ProteinMolecule
+        @test IgBLAST.blastdb_type(IgBLAST.molecule(IgBLASTn)) == "nucl"
+        @test IgBLAST.blastdb_type(IgBLAST.molecule(IgBLASTp)) == "prot"
 
-        @test IgBLAST.normalize_auxiliary(nothing) isa NoAuxiliary
-        @test IgBLAST.normalize_auxiliary("") isa NoAuxiliary
-        @test IgBLAST.normalize_auxiliary("aux.txt") isa AuxiliaryFile
         @test IgBLAST.normalize_auxiliary(noauxiliary) isa NoAuxiliary
+        @test IgBLAST.normalize_auxiliary("aux.txt") isa AuxiliaryFile
 
         @test germlines_for(IgBLASTn, "V.fa", "D.fa", "J.fa") isa VDJGermlines
-        @test germlines_for(IgBLASTp, "V.fa", "D.fa", "J.fa") isa VGermlines
         @test germlines_for(IgBLASTp, "V.fa") isa VGermlines
-        @test GermlineDatabases === VDJGermlines
     end
 
     function write_dummy_fasta(path)
@@ -145,7 +132,9 @@ end
         end
     end
 
-    @testset "Run IgBLASTn with custom aux" begin
+    human = Dict{String,String}("organism" => "human", "domain_system" => "imgt")
+
+    @testset "prepare IgBLASTn with custom aux" begin
         query_file = tempname() * ".fasta"
         v_database = tempname() * ".fasta"
         d_database = tempname() * ".fasta"
@@ -156,56 +145,27 @@ end
         foreach(write_dummy_fasta, (query_file, v_database, d_database, j_database))
         touch(aux_file)
 
-        @test_logs (:info, r"IgBLAST analysis completed.*") run_igblast(
-            IgBLASTn,
-            query_file,
-            v_database,
-            d_database,
-            j_database,
-            aux_file,
-            output_file;
+        result = prepare(
+            IgBLASTn, v_database, d_database, j_database;
+            aux=aux_file,
             additional_params=Dict{String,String}(
                 "organism" => "human",
                 "domain_system" => "imgt",
                 "ungapped" => "",
             ),
-        )
+        ) do ig
+            @test ig isa IgBLASTSession
+            ig(query_file, output_file)
+        end
 
+        @test result == output_file
         @test isfile(output_file)
         @test filesize(output_file) > 0
 
         foreach(rm, (query_file, v_database, d_database, j_database, aux_file, output_file))
     end
 
-    @testset "Run IgBLASTn without aux (omitted)" begin
-        query_file = tempname() * ".fasta"
-        v_database = tempname() * ".fasta"
-        d_database = tempname() * ".fasta"
-        j_database = tempname() * ".fasta"
-        output_file = tempname() * ".txt"
-
-        foreach(write_dummy_fasta, (query_file, v_database, d_database, j_database))
-
-        @test_logs (:info, r"IgBLAST analysis completed.*") run_igblast(
-            IgBLASTn,
-            query_file,
-            v_database,
-            d_database,
-            j_database,
-            output_file;
-            additional_params=Dict{String,String}(
-                "organism" => "human",
-                "domain_system" => "imgt",
-            ),
-        )
-
-        @test isfile(output_file)
-        @test filesize(output_file) > 0
-
-        foreach(rm, (query_file, v_database, d_database, j_database, output_file))
-    end
-
-    @testset "Run IgBLASTn without aux (nothing / empty / typed)" begin
+    @testset "prepare IgBLASTn without aux" begin
         query_file = tempname() * ".fasta"
         v_database = tempname() * ".fasta"
         d_database = tempname() * ".fasta"
@@ -215,30 +175,17 @@ end
         foreach(write_dummy_fasta, (query_file, v_database, d_database, j_database))
         dbs = VDJGermlines(v_database, d_database, j_database)
 
-        @test_logs (:info, r"IgBLAST analysis completed.*") run_igblast(
-            IgBLASTn, query_file, dbs, output_file;
-            additional_params=Dict{String,String}("organism" => "human", "domain_system" => "imgt"),
-        )
+        prepare(IgBLASTn, dbs; additional_params=human) do ig
+            @test isconcretetype(typeof(ig))
+            ig(query_file, output_file)
+        end
         @test isfile(output_file)
+        @test filesize(output_file) > 0
 
-        output_file2 = tempname() * ".txt"
-        @test_logs (:info, r"IgBLAST analysis completed.*") run_igblast(
-            IgBLASTn, query_file, v_database, d_database, j_database, nothing, output_file2;
-            additional_params=Dict{String,String}("organism" => "human", "domain_system" => "imgt"),
-        )
-        @test isfile(output_file2)
-
-        output_file3 = tempname() * ".txt"
-        @test_logs (:info, r"IgBLAST analysis completed.*") run_igblast(
-            IgBLASTn, query_file, v_database, d_database, j_database, "", output_file3;
-            additional_params=Dict{String,String}("organism" => "human", "domain_system" => "imgt"),
-        )
-        @test isfile(output_file3)
-
-        foreach(rm, (query_file, v_database, d_database, j_database, output_file, output_file2, output_file3))
+        foreach(rm, (query_file, v_database, d_database, j_database, output_file))
     end
 
-    @testset "IgBLASTRunner functor" begin
+    @testset "command is a direct IgBLAST Cmd" begin
         query_file = tempname() * ".fasta"
         v_database = tempname() * ".fasta"
         d_database = tempname() * ".fasta"
@@ -246,53 +193,77 @@ end
         output_file = tempname() * ".txt"
 
         foreach(write_dummy_fasta, (query_file, v_database, d_database, j_database))
+        dbs = VDJGermlines(v_database, d_database, j_database)
 
-        runner = IgBLASTRunner(
-            IgBLASTn;
-            additional_params=Dict{String,String}(
-                "organism" => "human",
-                "domain_system" => "imgt",
-            ),
-        )
-        @test runner.aux isa NoAuxiliary
-        @test runner.outfmt == 19
-        @test_logs (:info, r"IgBLAST analysis completed.*") runner(
-            query_file, v_database, d_database, j_database, output_file,
-        )
+        prepare(IgBLASTn, dbs; additional_params=human) do ig
+            cmd = @inferred command(ig, query_file, output_file)
+            @test cmd isa Cmd
+            exe = IgBLAST.executable_path(IgBLASTn)
+            @test cmd.exec[1] == exe
+            @test "-query" in cmd.exec
+            @test "-out" in cmd.exec
+            run(cmd)
+        end
+
         @test isfile(output_file)
+        @test filesize(output_file) > 0
 
-        output_file2 = tempname() * ".txt"
-        @test_logs (:info, r"IgBLAST analysis completed.*") runner(
-            query_file, VDJGermlines(v_database, d_database, j_database), output_file2,
-        )
-        @test isfile(output_file2)
+        foreach(rm, (query_file, v_database, d_database, j_database, output_file))
+    end
 
-        foreach(rm, (query_file, v_database, d_database, j_database, output_file, output_file2))
+    @testset "README timing example" begin
+        query_file = tempname() * ".fasta"
+        v_database = tempname() * ".fasta"
+        d_database = tempname() * ".fasta"
+        j_database = tempname() * ".fasta"
+        output_file = tempname() * ".tsv"
+
+        foreach(write_dummy_fasta, (query_file, v_database, d_database, j_database))
+        dbs = VDJGermlines(v_database, d_database, j_database)
+
+        seconds = prepare(IgBLASTn, dbs; additional_params=human, num_threads=1) do ig
+            @elapsed run(command(ig, query_file, output_file))
+        end
+
+        @test seconds isa Float64
+        @test seconds >= 0
+        @test isfile(output_file)
+        @test filesize(output_file) > 0
+
+        foreach(rm, (query_file, v_database, d_database, j_database, output_file))
     end
 
     @testset "Missing custom aux errors clearly" begin
-        query_file = tempname() * ".fasta"
         v_database = tempname() * ".fasta"
         d_database = tempname() * ".fasta"
         j_database = tempname() * ".fasta"
-        output_file = tempname() * ".txt"
-        foreach(write_dummy_fasta, (query_file, v_database, d_database, j_database))
+        foreach(write_dummy_fasta, (v_database, d_database, j_database))
 
-        @test_throws ArgumentError run_igblast(
-            IgBLASTn,
-            query_file,
-            v_database,
-            d_database,
-            j_database,
-            "/nonexistent/aux.txt",
-            output_file,
-        )
+        @test_throws ArgumentError prepare(
+            IgBLASTn, v_database, d_database, j_database;
+            aux="/nonexistent/aux.txt",
+        ) do ig
+            error("should not run")
+        end
 
-        foreach(rm, (query_file, v_database, d_database, j_database))
-        isfile(output_file) && rm(output_file)
+        foreach(rm, (v_database, d_database, j_database))
     end
 
-    @testset "Run IgBLASTp (V-only)" begin
+    @testset "IgBLASTp rejects auxiliary data" begin
+        v_database = tempname() * ".fasta"
+        write_nucleotide_db(v_database)
+        aux_file = tempname() * ".txt"
+        touch(aux_file)
+
+        @test_throws ArgumentError prepare(IgBLASTp, v_database; aux=aux_file) do ig
+            error("should not run")
+        end
+
+        rm(v_database)
+        rm(aux_file)
+    end
+
+    @testset "prepare IgBLASTp (V-only)" begin
         query_file = tempname() * ".fasta"
         v_database = tempname() * ".fasta"
         output_file = tempname() * ".txt"
@@ -300,34 +271,17 @@ end
         write_protein_query(query_file)
         write_nucleotide_db(v_database)
 
-        @test_logs (:info, r"IgBLAST analysis completed.*") run_igblast(
-            IgBLASTp,
-            query_file,
-            v_database,
-            output_file;
+        prepare(
+            IgBLASTp, v_database;
             additional_params=Dict{String,String}("organism" => "human"),
-        )
+        ) do ig
+            ig(query_file, output_file)
+        end
 
         @test isfile(output_file)
         @test filesize(output_file) > 0
 
-        # Compat: still accepts unused D/J paths
-        d_database = tempname() * ".fasta"
-        j_database = tempname() * ".fasta"
-        output_file2 = tempname() * ".txt"
-        foreach(write_nucleotide_db, (d_database, j_database))
-        @test_logs (:info, r"IgBLAST analysis completed.*") run_igblast(
-            IgBLASTp,
-            query_file,
-            v_database,
-            d_database,
-            j_database,
-            output_file2;
-            additional_params=Dict{String,String}("organism" => "human"),
-        )
-        @test isfile(output_file2)
-
-        foreach(rm, (query_file, v_database, d_database, j_database, output_file, output_file2))
+        foreach(rm, (query_file, v_database, output_file))
     end
 
     @testset "Gzip query and output autodetection" begin
@@ -345,20 +299,14 @@ end
 
         @test IgBLAST.file_encoding(query_gz) isa IgBLAST.GzipEncoding
         @test IgBLAST.file_encoding(output_gz) isa IgBLAST.GzipEncoding
-        @test IgBLAST.count_fasta_sequences(query_gz) == 1
+        @test IgBLAST.file_encoding(query_file) isa IgBLAST.PlainEncoding
 
-        @test_logs (:info, r"IgBLAST analysis completed.*") run_igblast(
-            IgBLASTn,
-            query_gz,
-            v_database,
-            d_database,
-            j_database,
-            output_gz;
-            additional_params=Dict{String,String}(
-                "organism" => "human",
-                "domain_system" => "imgt",
-            ),
-        )
+        prepare(
+            IgBLASTn, v_database, d_database, j_database;
+            additional_params=human,
+        ) do ig
+            ig(query_gz, output_gz)
+        end
 
         @test isfile(output_gz)
         @test filesize(output_gz) > 0
@@ -368,5 +316,14 @@ end
         end
 
         foreach(rm, (query_file, query_gz, v_database, d_database, j_database, output_gz))
+    end
+
+    @testset "Variant and germline kinds pair by dispatch" begin
+        v_database = tempname() * ".fasta"
+        write_nucleotide_db(v_database)
+        @test_throws MethodError prepare(IgBLASTn, VGermlines(v_database)) do ig
+            error("should not run")
+        end
+        rm(v_database)
     end
 end

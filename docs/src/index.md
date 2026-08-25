@@ -6,9 +6,7 @@ CurrentModule = IgBLAST
 
 A Julia package for running [IgBLAST](https://github.com/mashu/IgBLAST.jl) (v1.22.0) on immunoglobulin (Ig) and T cell receptor (TCR) sequences.
 
-Auxiliary data is **optional**: omit it by default, or pass a custom [`AuxiliaryFile`](@ref) / path when needed.
-Query FASTA and result files ending in `.gz` are handled automatically (decompress query / compress output).
-Prefer [`IgBLASTRunner`](@ref) for repeated runs.
+[`prepare`](@ref) builds BLAST databases, then runs your `do` block with an [`IgBLASTSession`](@ref). The temporary databases are deleted when the block returns — the same resource pattern as `mktempdir` / `open`.
 
 ## Installation
 
@@ -24,56 +22,45 @@ Binaries install automatically on first `using IgBLAST`.
 ```julia
 using IgBLAST
 
-# No auxiliary file
-run_igblast(
-    IgBLASTn,
-    "query.fasta",
-    "V.fasta",
-    "D.fasta",
-    "J.fasta",
-    "output.tsv";
-    additional_params = Dict("organism" => "human", "domain_system" => "imgt"),
-)
+dbs = VDJGermlines("V.fasta", "D.fasta", "J.fasta")
+params = Dict("organism" => "human", "domain_system" => "imgt")
+
+prepare(IgBLASTn, dbs; additional_params=params) do ig
+    ig("query.fasta", "output.tsv")
+end
 
 # Gzip query and/or output (autodetected)
-run_igblast(
-    IgBLASTn,
-    "query.fasta.gz",
-    "V.fasta",
-    "D.fasta",
-    "J.fasta",
-    "output.tsv.gz",
-)
+prepare(IgBLASTn, dbs; additional_params=params) do ig
+    ig("query.fasta.gz", "output.tsv.gz")
+end
 
 # Custom auxiliary file
-run_igblast(
-    IgBLASTn,
-    "query.fasta",
-    "V.fasta",
-    "D.fasta",
-    "J.fasta",
-    "human_gl.aux",
-    "output.tsv",
-)
-
-# Typed germlines + runner
-dbs = VDJGermlines("V.fasta", "D.fasta", "J.fasta")
-runner = IgBLASTRunner(IgBLASTn; additional_params=Dict("organism" => "human"))
-runner("query.fasta", dbs, "out.tsv")
+prepare(IgBLASTn, dbs; aux="human_gl.aux", additional_params=params) do ig
+    ig("query.fasta", "output.tsv")
+end
 ```
+
+### Timing the IgBLAST command
+
+`makeblastdb` runs before the `do` block. For uncompressed files, [`command`](@ref) is NCBI IgBLAST writing a plain file:
+
+```julia
+seconds = prepare(IgBLASTn, dbs; additional_params=params, num_threads=8) do ig
+    @elapsed run(command(ig, "query.fasta", "output.tsv"))
+end
+```
+
+Do not use `.gz` paths here — gzip is Julia-side and would be included in the clock.
 
 ### IgBLASTp
 
-Only the V germline is used (D/J are not prepared):
+Only the V germline is used:
 
 ```julia
-run_igblast(
-    IgBLASTp,
-    "query_protein.fasta",
-    "V_nucleotide.fasta",
-    "output.tsv";
-    additional_params = Dict("organism" => "human"),
-)
+prepare(IgBLASTp, VGermlines("V_nucleotide.fasta");
+        additional_params=Dict("organism" => "human")) do ig
+    ig("query_protein.fasta", "output.tsv")
+end
 ```
 
 ## API

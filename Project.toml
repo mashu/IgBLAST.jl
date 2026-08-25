@@ -1,6 +1,6 @@
 name = "IgBLAST"
 uuid = "0b79348f-fd03-46c5-b933-bdb7f1bed3f3"
-version = "0.0.11"
+version = "0.1.0"
 authors = ["Mateusz Kaduk <mateusz.kaduk@gmail.com> and contributors"]
 license = "MIT"
 
@@ -10,7 +10,6 @@ BioSequences = "7e6ae17a-c86d-528c-b3b9-7f778a29fe59"
 CodecZlib = "944b1d66-785c-5afd-91f1-9de20f533193"
 FASTX = "c2308a5c-f048-11e8-3e8a-31650f418d12"
 Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
-ProgressMeter = "92933f4c-e287-5a05-a399-4b506db050ca"
 
 [compat]
 Aqua = "0.8.9"
@@ -19,7 +18,6 @@ BioSequences = "3.4.1"
 CodecZlib = "0.7.6"
 FASTX = "2.1.7"
 Pkg = "1.10.0"
-ProgressMeter = "1.10.2"
 Test = "1.10.0"
 julia = "1.10"
 

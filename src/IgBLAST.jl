@@ -3,47 +3,47 @@
 
 A Julia package for running IgBLAST analyses on immunoglobulin (Ig) and T cell receptor (TCR) sequences.
 
-Auxiliary data is **optional**: omit it, or pass a custom file only when needed.
-Prefer [`IgBLASTRunner`](@ref) for repeated configured runs.
+Prepare BLAST databases once with [`prepare`](@ref), then run IgBLAST inside
+the `do` block. Temporary databases are deleted when the block returns.
 
 # Exports
 - `install_igblast`, `is_igblast_installed`
-- `run_igblast`, `IgBLASTRunner`
+- `prepare`, `command`, `IgBLASTSession`
 - `AbstractIgBLAST`, `IgBLASTn`, `IgBLASTp`
 - `AbstractAuxiliary`, `NoAuxiliary`, `noauxiliary`, `AuxiliaryFile`
-- `AbstractGermlines`, `VGermlines`, `VDJGermlines`, `GermlineDatabases`
+- `AbstractGermlines`, `VGermlines`, `VDJGermlines`, `germlines_for`
 
 # Examples
 
 ```julia
 using IgBLAST
 
-# No auxiliary file (plain or gzip query/output autodetected from extension)
-run_igblast(IgBLASTn, "query.fasta.gz", "V.fasta", "D.fasta", "J.fasta", "out.tsv.gz";
-            additional_params = Dict("organism" => "human", "domain_system" => "imgt"))
-
-# Custom auxiliary file when required
-run_igblast(IgBLASTn, "query.fasta", "V.fasta", "D.fasta", "J.fasta", "human_gl.aux", "out.tsv")
-
-# Typed germlines + runner
 dbs = VDJGermlines("V.fasta", "D.fasta", "J.fasta")
-runner = IgBLASTRunner(IgBLASTn; additional_params=Dict("organism"=>"human"))
-runner("query.fasta", dbs, "out.tsv")
+params = Dict("organism" => "human", "domain_system" => "imgt")
+
+prepare(IgBLASTn, dbs; additional_params=params) do ig
+    ig("query.fasta", "out.tsv")
+end
+
+# Time only igblastn (plain files; databases already prepared)
+t = prepare(IgBLASTn, dbs; additional_params=params) do ig
+    @elapsed run(command(ig, "query.fasta", "out.tsv"))
+end
 ```
 """
 module IgBLAST
 
 using Artifacts
 using CodecZlib
-using ProgressMeter
 import Pkg: ensure_artifact_installed
 using BioSequences
 using FASTX
 
-export install_igblast, run_igblast, is_igblast_installed, IgBLASTRunner
+export install_igblast, is_igblast_installed
+export prepare, command, IgBLASTSession
 export AbstractIgBLAST, IgBLASTn, IgBLASTp
 export AbstractAuxiliary, NoAuxiliary, noauxiliary, AuxiliaryFile
-export AbstractGermlines, VGermlines, VDJGermlines, GermlineDatabases, germlines_for
+export AbstractGermlines, VGermlines, VDJGermlines, germlines_for
 
 const IGBLAST_VERSION = "1.22.0"
 
@@ -52,10 +52,8 @@ include("paths.jl")
 include("io.jl")
 include("database.jl")
 include("command.jl")
-include("progress.jl")
-include("process.jl")
+include("session.jl")
 include("install.jl")
-include("run.jl")
 
 function __init__()
     artifact_toml = artifact_toml_path()
